@@ -18,6 +18,8 @@ DATASETS: dict[str, list[tuple[str, str, str]]] = {
         # NB: despite the dataset name suggesting geospatial data, this one is
         # published as a plain CSV with a free-text outlet address (no lat/lon).
         ("d_c475b9170c08f90580f4041bffd51639", "healthier_dining_fnb_partners.csv", "HPB"),
+        # Plain CSV, no coordinates: building_name/block/street/postal_code columns.
+        ("d_11edd0117280c5776651d7891114c88c", "supermarket_licences.csv", "NEA"),
     ],
     "B_fitness": [
         ("d_b3ae090692ecf632116c9885cfbd3424", "gyms_at_sg.geojson", "HPB"),
@@ -34,6 +36,7 @@ DATASETS: dict[str, list[tuple[str, str, str]]] = {
     "E_infrastructure": [
         ("d_99b71f5d34cf57a3a592fbfdef1f42b6", "parks_at_sg.geojson", "HPB"),
         ("d_14d807e20158338fd578c2913953516e", "park_facilities.geojson", "NParks"),
+        ("d_937424cca6d1617288a82a7aeb89f76d", "bicycle_racks.geojson", "LTA"),
     ],
     "G_demand": [
         ("d_d95ae740c0f8961a0b10435836660ce0", "resident_population_2020.csv", "SingStat"),

@@ -115,13 +115,23 @@ based on what fields it actually publishes:
   `BUILDING_NAME`) are matched by normalized name equality, then everything
   is *also* checked by haversine distance so on-site amenities with slightly
   different naming still count. Radii: 200m "on-site" (dining/fitness/
-  healthcare), 500m "nearby" (community clubs/parks), 1.2km demand-side
-  catchment (population/MRT/bus).
-- Two data.gov.sg datasets (Healthier Dining Partners, Licensed Pharmacies)
-  are published as plain CSV with a free-text address and no coordinates at
-  all — despite `.geojson`-sounding names, always check the actual file
-  content before assuming format. These are matched by substring-matching
-  the normalized mall name inside the address text (`count_by_address_text`).
+  healthcare/bicycle racks), 500m "nearby" (community clubs/parks), 1.2km
+  demand-side catchment (population/MRT/bus).
+- Three data.gov.sg datasets (Healthier Dining Partners, Licensed
+  Pharmacies, Supermarket Licences) are published as plain CSV with a
+  free-text address and no coordinates at all — despite `.geojson`-sounding
+  names, always check the actual file content before assuming format.
+  These are matched by word-boundary substring-matching the mall's full
+  name inside the address text (`count_by_address_text`).
+- **Trap**: `count_by_address_text` uses `normalize_name_strict`
+  (keeps spaces as boundaries, doesn't strip generic suffix words), *not*
+  the lenient `normalize_name` used for building-name equality. Reusing the
+  lenient one here breaks badly for any mall whose name reduces to a common
+  word once "Mall"/"Plaza"/etc. is stripped — e.g. "West Mall" → "west"
+  used to match nearly any address in western Singapore (Jurong West,
+  Sengkang West, ...), and "Tampines Mall" → "tampines" matched any address
+  merely located in the town of Tampines. If you add another free-text
+  address dataset, use `normalize_name_strict`, not `normalize_name`.
 
 Every raw count is min-max normalized to 0–100 across the mall population
 (not divided by each mall's total tenant count, which the charter's own
