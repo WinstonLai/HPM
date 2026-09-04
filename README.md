@@ -38,6 +38,7 @@ ETL is fast after the first pass.
 4. **Mall Comparison** — radar chart + strengths/weaknesses for up to 5 malls.
 5. **National Map** — mall locations coloured by score, with a shortlist toggle.
 6. **Strategic Matrix** — 2×2 Readiness × Demand quadrant view (Pioneer HPM / Quick Wins / Strategic Investment / Future Monitoring), the charter's proposed enhancement over a flat ranking.
+7. **Methodology** — plain-language explanation of the data sources, why raw counts are normalised, and the category weights, with an interactive worked example that recomputes any selected mall's actual score step by step (Supply contributions → Demand contributions → final index), plus a "what this score doesn't capture" section.
 
 ## Data sources
 

@@ -92,7 +92,12 @@ else:
     )
 
 st.divider()
+st.info(
+    "**New here?** The **Methodology** page (left sidebar) explains where this data comes "
+    "from and walks through exactly how any mall's score is calculated, with a real example.",
+    icon="📖",
+)
 st.caption(
     "Use the pages in the left sidebar: National Ranking, What-If Simulator, Mall Comparison, "
-    "National Map, and the Strategic Matrix enhancement."
+    "National Map, Strategic Matrix, and Methodology."
 )
