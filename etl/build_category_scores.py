@@ -11,7 +11,7 @@ additionally checked by straight-line distance so amenities that are on-site
 but named slightly differently (e.g. "ABC Mall Level 2") still count.
 
 Radii (deliberately generous for a POC without exact building footprints):
-  ON_SITE_RADIUS_M  - dining / fitness / healthcare amenities "at" a mall
+  ON_SITE_RADIUS_M  - dining / fitness / healthcare / bicycle racks "at" a mall
   NEARBY_RADIUS_M   - community clubs / parks "near" a mall
   CATCHMENT_RADIUS_M - population / MRT / bus for demand-side accessibility
 
@@ -58,29 +58,57 @@ def normalize_name(name: str) -> str:
     return name
 
 
+def normalize_name_strict(name: str) -> str:
+    """Like normalize_name but keeps generic suffix words ("mall", "plaza",
+    "west", ...) instead of stripping them, and keeps a single space between
+    tokens instead of fusing them together. Used only for free-text
+    substring matching, where two problems otherwise appear:
+      1. stripping to a bare word like "West Mall" -> "west" would match
+         almost any address in western Singapore (Jurong West, Sengkang
+         West, Admiralty Road West, ...);
+      2. fusing all tokens together (no separator) can coincidentally glue
+         an unrelated block/unit number onto a preceding word and form a
+         false match, e.g. "Novena Square" + "238 Thomson Road" fuses into
+         "...square238..." which contains "square2" (a false hit for the
+         mall "Square 2"). Keeping single spaces and padding both sides
+         before matching turns that into a proper whole-word check.
+    Equality-based building-name matching doesn't have either problem and
+    still uses the lenient, fully-fused normalize_name."""
+    name = (name or "").lower()
+    return NON_ALNUM_RE.sub(" ", name).strip()
+
+
 def count_by_address_text(malls: pd.DataFrame, addresses: pd.Series) -> np.ndarray:
     """Count matches for datasets published as a plain CSV with a free-text
     address column and no coordinates (e.g. HPB's Healthier Dining Partners,
-    HSA's Licensed Pharmacies) -- normalise both sides and substring-match
-    the mall name inside the outlet address. Skipped for very short mall
-    names (<4 normalised chars, e.g. "NEX", "IMM") to avoid spurious matches."""
-    norm_addresses = addresses.fillna("").map(normalize_name).to_numpy()
+    HSA's Licensed Pharmacies) -- normalise both sides and word-boundary
+    substring-match the mall's full name inside the outlet address. Skipped
+    for very short mall names (<4 normalised chars) to avoid spurious
+    matches."""
+    norm_addresses = addresses.fillna("").map(lambda a: f" {normalize_name_strict(a)} ").to_numpy()
     counts = np.zeros(len(malls), dtype=int)
     for i, mall_name in enumerate(malls["name"]):
-        key = normalize_name(mall_name)
+        key = normalize_name_strict(mall_name)
         if len(key) < 4:
             continue
-        counts[i] = sum(1 for addr in norm_addresses if key in addr)
+        padded_key = f" {key} "
+        counts[i] = sum(1 for addr in norm_addresses if padded_key in addr)
     return counts
 
 
-def load_csv_addresses(filename: str, address_col: str) -> pd.Series:
+def load_csv_addresses(filename: str, address_cols: str | list[str]) -> pd.Series:
+    """Return a Series of free-text addresses from a CSV. `address_cols` is
+    either a single already-combined address column, or a list of columns
+    (e.g. NEA's supermarket licences: building_name/block_house_num/
+    street_name are separate fields) to concatenate into one address string."""
     path = RAW_DIR / filename
     if not path.exists():
         print(f"  [warn] missing raw file {filename}, skipping this source")
         return pd.Series(dtype=str)
     df = pd.read_csv(path)
-    return df[address_col]
+    if isinstance(address_cols, str):
+        return df[address_cols]
+    return df[address_cols].fillna("").astype(str).agg(" ".join, axis=1)
 
 
 def load_points(filename: str) -> pd.DataFrame:
@@ -254,12 +282,19 @@ def build_category_scores() -> pd.DataFrame:
     subzone_centroids = load_subzone_centroids()
     out["region"] = assign_region(malls, subzone_centroids)
 
-    print("Category A - Healthy Dining Ecosystem ...")
+    print("Category A - Healthy Dining Ecosystem (incl. supermarkets) ...")
     dining = load_points("healthier_eateries.geojson")
     dining_partners = load_csv_addresses("healthier_dining_fnb_partners.csv", "Outlet_Address")
+    # NEA's licence list has no single address field -- build one from its
+    # separate building_name/block_house_num/street_name columns.
+    supermarkets = load_csv_addresses(
+        "supermarket_licences.csv", ["building_name", "block_house_num", "street_name"]
+    )
+    out["A_supermarket_count"] = count_by_address_text(malls, supermarkets)
     out["A_dining_count"] = (
         count_nearby(malls, dining, ON_SITE_RADIUS_M, "ADDRESSBUILDINGNAME")
         + count_by_address_text(malls, dining_partners)
+        + out["A_supermarket_count"]
     )
     out["A_dining_score"] = min_max_normalize(out["A_dining_count"])
 
@@ -285,12 +320,14 @@ def build_category_scores() -> pd.DataFrame:
     )
     out["D_healthcare_score"] = min_max_normalize(out["D_healthcare_count"])
 
-    print("Category E - Healthy Infrastructure (parks proxy) ...")
+    print("Category E - Healthy Infrastructure (parks + bicycle racks) ...")
     infra = pd.concat([
         load_points("parks_at_sg.geojson"),
         load_points("park_facilities.geojson"),
     ], ignore_index=True)
-    out["E_infra_count"] = count_nearby(malls, infra, NEARBY_RADIUS_M)
+    bike_racks = load_points("bicycle_racks.geojson")
+    out["E_bike_rack_count"] = count_nearby(malls, bike_racks, ON_SITE_RADIUS_M)
+    out["E_infra_count"] = count_nearby(malls, infra, NEARBY_RADIUS_M) + out["E_bike_rack_count"]
     out["E_infra_score"] = min_max_normalize(out["E_infra_count"])
 
     print("Category F - Landlord & Partnership Readiness (operator proxy) ...")

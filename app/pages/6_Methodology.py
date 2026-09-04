@@ -62,9 +62,9 @@ st.header("2. What each category actually measures")
 
 CATEGORY_INFO = [
     ("A_dining_score", "Supply", "🍽️", "Healthy Dining",
-     "Healthier Dining Programme outlets and HPB dining partners found at or "
-     "within ~200m of the mall.",
-     "HPB: Healthier Eateries, Healthier Dining Partners"),
+     "Healthier Dining Programme outlets, HPB dining partners, and licensed supermarkets "
+     "found at or within ~200m of the mall.",
+     "HPB: Healthier Eateries, Healthier Dining Partners · NEA: Supermarket Licences"),
     ("B_fitness_score", "Supply", "🏋️", "Physical Activity",
      "Gyms and sport facilities at or within ~200m of the mall.",
      "HPB: Gyms@SG · SportSG: Sport Facilities"),
@@ -76,8 +76,9 @@ CATEGORY_INFO = [
      "CHAS clinics and licensed pharmacies at or within ~200m of the mall.",
      "MOH: CHAS Clinics · HSA: Licensed Pharmacies"),
     ("E_infra_score", "Supply", "🌳", "Healthy Infrastructure",
-     "Parks and park facilities (playgrounds, fitness corners, green spaces) within ~500m.",
-     "HPB: Parks@SG · NParks: Park Facilities"),
+     "Parks and park facilities (playgrounds, fitness corners, green spaces) within ~500m, "
+     "plus bicycle parking racks at or within ~200m of the mall.",
+     "HPB: Parks@SG · NParks: Park Facilities · LTA: Bicycle Rack"),
     ("F_partnership_score", "Supply", "🏢", "Partnership Readiness",
      "A proxy: the size of the mall operator's portfolio (bigger chains are more likely "
      "to have centralised CSR/health-programme capacity), plus a bonus for the one "
@@ -269,6 +270,9 @@ A few other simplifications:
 
 - **Healthy Dining is a density score, not a true "% of F&B outlets" figure** — that needs
   a full per-mall tenant directory, which isn't publicly available.
+- **Supermarket presence counts any licensed supermarket**, not specifically ones "with
+  healthier choice options" as the charter names it — no public dataset flags which
+  supermarkets carry HPB's healthier-choice range at the outlet level.
 - **Population catchment uses an approximate centroid** for each URA subzone (not the exact
   boundary), so it can occasionally under- or over-count a mall sitting right at a
   subzone's edge.
