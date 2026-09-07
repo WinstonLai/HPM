@@ -19,6 +19,12 @@ if not data_loader.data_available():
 
 df = data_loader.load_default_index()
 
+# green (high score) -> red (low score), scaled against all assessed malls
+# so the shortlist toggle below only changes which points are shown, not
+# how their colors are stretched.
+lo, hi = df["hpm_index"].min(), df["hpm_index"].max()
+span = max(hi - lo, 1e-9)
+
 shortlist_choice = st.radio(
     "Show", ["All assessed malls", "Top 10 candidates", "Top 20 candidates", "Top 50 candidates"],
     horizontal=True,
@@ -29,10 +35,6 @@ elif shortlist_choice == "Top 20 candidates":
     df = df[df["top20"]]
 elif shortlist_choice == "Top 50 candidates":
     df = df[df["top50"]]
-
-# green (high score) -> red (low score)
-lo, hi = df["hpm_index"].min(), df["hpm_index"].max()
-span = max(hi - lo, 1e-9)
 
 
 def score_to_color(score: float) -> list[int]:

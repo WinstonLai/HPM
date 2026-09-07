@@ -29,16 +29,19 @@ if not data_loader.data_available():
 category_scores = data_loader.load_category_scores()
 index_df = data_loader.load_default_index()
 
+supply_pct = round(scoring.SUPPLY_BLOCK_WEIGHT * 100)
+demand_pct = round(scoring.DEMAND_BLOCK_WEIGHT * 100)
+
 # --------------------------------------------------------------------------------
 st.header("1. The big picture")
 st.markdown(
-    """
+    f"""
 Every mall gets **one score out of 100** — the **HPM Index** — built from two halves:
 
-- **Supply Readiness (70% of the score)** — how much of the health-promoting stuff
+- **Supply Readiness ({supply_pct}% of the score)** — how much of the health-promoting stuff
   (healthy dining, gyms, clinics, parks, community programmes, an engaged landlord)
   already exists at or near the mall today.
-- **Demand Opportunity (30% of the score)** — how much *potential* there is around the
+- **Demand Opportunity ({demand_pct}% of the score)** — how much *potential* there is around the
   mall: nearby population, transport access, and how under-served the area currently is.
 
 A mall doesn't need to win on both. A small mall with almost no gyms or clinics nearby
@@ -51,7 +54,7 @@ col1, col2, col3 = st.columns([2, 1, 2])
 with col1:
     st.markdown("#### Supply Readiness\n*(6 categories, weighted)*")
 with col2:
-    st.markdown("<h2 style='text-align:center'>×70% +</h2>", unsafe_allow_html=True)
+    st.markdown(f"<h2 style='text-align:center'>×{supply_pct}% +</h2>", unsafe_allow_html=True)
 with col3:
     st.markdown("#### Demand Opportunity\n*(3 factors, weighted)*")
 
@@ -221,10 +224,12 @@ with wcol2:
     st.dataframe(demand_table, hide_index=True, use_container_width=True)
     st.markdown(f"Sum of contributions = **Demand Score = {row['demand_score']:.1f}**")
 
-st.markdown("**Step C — Combine them (70% Supply + 30% Demand)**")
+st.markdown(f"**Step C — Combine them ({supply_pct}% Supply + {demand_pct}% Demand)**")
 st.latex(
-    r"\text{HPM Index} = " + f"{row['supply_score']:.1f}" + r"\times 0.70 + "
-    + f"{row['demand_score']:.1f}" + r"\times 0.30 = " + f"{row['hpm_index']:.1f}"
+    r"\text{HPM Index} = " + f"{row['supply_score']:.1f}"
+    + rf"\times {scoring.SUPPLY_BLOCK_WEIGHT:.2f} + "
+    + f"{row['demand_score']:.1f}"
+    + rf"\times {scoring.DEMAND_BLOCK_WEIGHT:.2f} = " + f"{row['hpm_index']:.1f}"
 )
 st.success(
     f"**{mall_name}**'s HPM Index is **{row['hpm_index']:.1f} / 100** — "

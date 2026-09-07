@@ -43,22 +43,40 @@ def _throttle() -> None:
     _last_call = time.monotonic()
 
 
-def _poll_download_url(dataset_id: str, retries: int = 4) -> str:
-    url = f"{BASE_URL}/{dataset_id}/poll-download"
+def _get_with_retries(url: str, timeout: float, retries: int, throttle: bool) -> requests.Response:
+    """GET with retries on rate-limiting, transient HTTP errors, and
+    connection/timeout failures -- any of these can occur on a single call
+    within a ~10-15 minute ETL run and shouldn't abort the whole pipeline."""
     last_err: Optional[Exception] = None
-    for _ in range(retries):
-        _throttle()
-        resp = requests.get(url, timeout=30)
+    for attempt in range(retries):
+        if throttle:
+            _throttle()
+        try:
+            resp = requests.get(url, timeout=timeout)
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+            last_err = exc
+            time.sleep(5 * (attempt + 1))
+            continue
         if resp.status_code == 429:
-            last_err = DownloadError(f"rate limited on {dataset_id}")
+            last_err = DownloadError(f"rate limited on {url}")
             time.sleep(20)
             continue
+        if resp.status_code >= 500:
+            last_err = DownloadError(f"server error {resp.status_code} on {url}")
+            time.sleep(5 * (attempt + 1))
+            continue
         resp.raise_for_status()
-        payload = resp.json()
-        if payload.get("code") != 0:
-            raise DownloadError(f"{dataset_id}: {payload.get('errorMsg')}")
-        return payload["data"]["url"]
-    raise last_err or DownloadError(f"failed to poll-download {dataset_id}")
+        return resp
+    raise last_err or DownloadError(f"failed to GET {url}")
+
+
+def _poll_download_url(dataset_id: str, retries: int = 4) -> str:
+    url = f"{BASE_URL}/{dataset_id}/poll-download"
+    resp = _get_with_retries(url, timeout=30, retries=retries, throttle=True)
+    payload = resp.json()
+    if payload.get("code") != 0:
+        raise DownloadError(f"{dataset_id}: {payload.get('errorMsg')}")
+    return payload["data"]["url"]
 
 
 def fetch_dataset(dataset_id: str, filename: str, force: bool = False) -> Path:
@@ -67,8 +85,7 @@ def fetch_dataset(dataset_id: str, filename: str, force: bool = False) -> Path:
     if dest.exists() and not force:
         return dest
     download_url = _poll_download_url(dataset_id)
-    resp = requests.get(download_url, timeout=90)
-    resp.raise_for_status()
+    resp = _get_with_retries(download_url, timeout=90, retries=4, throttle=False)
     dest.write_bytes(resp.content)
     return dest
 
