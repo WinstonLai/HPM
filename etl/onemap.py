@@ -15,9 +15,26 @@ import requests
 
 SEARCH_URL = "https://www.onemap.gov.sg/api/common/elastic/search"
 
+# OneMap has no documented per-caller rate limit, but a mall with no primary
+# match can trigger a fallback query plus retries -- up to 4 real requests
+# behind what build_mall_registry.py budgets as a single 0.3s-apart call.
+# Throttle at the request level (not just per-mall) so that fan-out can't
+# push the effective rate far past what was tuned.
+MIN_SECONDS_BETWEEN_CALLS = 0.25
+_last_call = 0.0
+
+
+def _throttle() -> None:
+    global _last_call
+    wait = MIN_SECONDS_BETWEEN_CALLS - (time.monotonic() - _last_call)
+    if wait > 0:
+        time.sleep(wait)
+    _last_call = time.monotonic()
+
 
 def geocode(query: str) -> Optional[dict]:
     """Return the best-matching OneMap result for `query`, or None."""
+    _throttle()
     try:
         resp = requests.get(
             SEARCH_URL,

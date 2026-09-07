@@ -92,7 +92,18 @@ def compute_index(
 
     df = df.sort_values("hpm_index", ascending=False).reset_index(drop=True)
     df["rank"] = df.index + 1
-    df["tier"] = pd.qcut(df["hpm_index"], q=4, labels=TIERS, duplicates="drop")
+    # Cut on `rank` (always unique, 1..n) rather than `hpm_index` (which can
+    # have ties) so duplicates="drop" never collapses the bin count below
+    # len(TIERS) and raises. With fewer malls than tiers, shrink the label
+    # set instead of crashing.
+    n_bins = min(4, df["rank"].nunique())
+    # rank=1 is the best mall, so bins of ascending rank get labels in
+    # descending tier order (best rank -> Platinum, worst rank -> Bronze).
+    tier_labels = list(reversed(TIERS))[:n_bins]
+    if n_bins:
+        df["tier"] = pd.qcut(df["rank"], q=n_bins, labels=tier_labels, duplicates="drop")
+    else:
+        df["tier"] = pd.Series(dtype=object)
     n = len(df)
     df["top10"] = df["rank"] <= min(10, n)
     df["top20"] = df["rank"] <= min(20, n)

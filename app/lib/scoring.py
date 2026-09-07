@@ -12,6 +12,8 @@ from scoring_formula import (  # noqa: F401,E402
     CATEGORY_LABELS,
     DEFAULT_DEMAND_WEIGHTS,
     DEFAULT_SUPPLY_WEIGHTS,
+    DEMAND_BLOCK_WEIGHT,
+    SUPPLY_BLOCK_WEIGHT,
     add_strategic_quadrant,
     compute_index,
 )

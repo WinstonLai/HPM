@@ -147,15 +147,20 @@ def scrape_commercial_estates() -> list[dict]:
 
 
 def scrape_mall_list() -> pd.DataFrame:
-    """Union + de-duplicate all three sources (by normalised display name,
-    so e.g. a wikilinked and plain-text mention of the same mall collapse
-    into one row). Earlier sources win on conflicting page_title/region,
-    since sources 1 and 2 are wikilinked (usable for infobox scraping) while
-    source 3 is a lower-confidence supplementary list."""
+    """Union + de-duplicate all three sources. De-dup keys on the normalised
+    Wikipedia *page_title* (the canonical article identifier) rather than
+    the display name, so the same mall wikilinked with different display
+    text across sources (or with punctuation/spacing differences) still
+    collapses into one row -- display-name text varies more than the page
+    it links to. Source 3's plain-text-only entries (no article) fall back
+    to a name-based key, since page_title == name for those. Earlier
+    sources win on conflicting page_title/region, since sources 1 and 2 are
+    wikilinked (usable for infobox scraping) while source 3 is a
+    lower-confidence supplementary list."""
     all_rows = scrape_regional_list() + scrape_category_members() + scrape_commercial_estates()
     seen: dict[str, dict] = {}
     for row in all_rows:
-        key = dedupe_key(row["name"])
+        key = dedupe_key(row["page_title"]) or dedupe_key(row["name"])
         if key and key not in seen:
             seen[key] = row
     df = pd.DataFrame(seen.values()).reset_index(drop=True)

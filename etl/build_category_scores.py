@@ -82,14 +82,15 @@ def count_by_address_text(malls: pd.DataFrame, addresses: pd.Series) -> np.ndarr
     """Count matches for datasets published as a plain CSV with a free-text
     address column and no coordinates (e.g. HPB's Healthier Dining Partners,
     HSA's Licensed Pharmacies) -- normalise both sides and word-boundary
-    substring-match the mall's full name inside the outlet address. Skipped
-    for very short mall names (<4 normalised chars) to avoid spurious
-    matches."""
+    substring-match the mall's full name inside the outlet address. The
+    padding-based word-boundary check (not a length cutoff) is what guards
+    against spurious matches, so short names like "IMM" or "Duo" are matched
+    the same as any other -- see normalize_name_strict's docstring."""
     norm_addresses = addresses.fillna("").map(lambda a: f" {normalize_name_strict(a)} ").to_numpy()
     counts = np.zeros(len(malls), dtype=int)
     for i, mall_name in enumerate(malls["name"]):
         key = normalize_name_strict(mall_name)
-        if len(key) < 4:
+        if not key:
             continue
         padded_key = f" {key} "
         counts[i] = sum(1 for addr in norm_addresses if padded_key in addr)
