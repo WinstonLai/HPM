@@ -29,8 +29,8 @@ if not data_loader.data_available():
 category_scores = data_loader.load_category_scores()
 index_df = data_loader.load_default_index()
 
-supply_pct = round(scoring.SUPPLY_BLOCK_WEIGHT * 100)
-demand_pct = round(scoring.DEMAND_BLOCK_WEIGHT * 100)
+supply_pct = round(scoring.SUPPLY_BLOCK_WEIGHT)
+demand_pct = round(scoring.DEMAND_BLOCK_WEIGHT)
 
 # --------------------------------------------------------------------------------
 st.header("1. The big picture")
