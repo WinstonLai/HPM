@@ -74,8 +74,9 @@ Two independent halves connected only through `data/processed/*.csv`:
      whatever region a mall's Wikipedia source gave it — most of the 185
      don't carry one at scrape time since only the first of the three
      sources above is region-organised.
-   - `build_amenities.py` downloads the ~11 raw datasets (dataset IDs are
-     defined here, grouped by category A–G) → `data/raw/`.
+   - `build_amenities.py` downloads the 15 raw datasets (dataset IDs are
+     defined here, grouped by category A–G, excluding F which is a scraped
+     proxy with no downloadable dataset) → `data/raw/`.
    - `build_category_scores.py` joins every raw dataset to the mall registry
      and produces one normalized 0–100 score per category (A–G) per mall →
      `data/processed/category_scores.csv`.
@@ -92,11 +93,13 @@ Two independent halves connected only through `data/processed/*.csv`:
 
 2. **`app/`** — the Streamlit dashboard, reads only `data/processed/*.csv`,
    never calls external APIs live. `Home.py` is the entrypoint (Page 1 —
-   Executive Summary); `app/pages/` holds Pages 2–6 (National Ranking,
+   Executive Summary); `app/pages/` holds Pages 2–7 (National Ranking,
    What-If Simulator, Mall Comparison, National Map, Strategic Matrix — a
-   2×2 Readiness×Demand quadrant enhancement). Each page file does its own
-   `sys.path.insert` to reach `app/lib/` (there's no package `__init__.py`;
-   pages are run as standalone scripts by Streamlit).
+   2×2 Readiness×Demand quadrant enhancement — and Methodology, an
+   interactive walkthrough of the scoring math and data-source limitations).
+   Each page file does its own `sys.path.insert` to reach `app/lib/`
+   (there's no package `__init__.py`; pages are run as standalone scripts
+   by Streamlit).
 
 **`etl/scoring_formula.py` is the single source of truth for the composite
 index formula.** It's imported both by `build_index.py` (the offline default
