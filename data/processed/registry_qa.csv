@@ -48,3 +48,18 @@ geocode_rejected,Toa Payoh Town Centre,no OneMap candidate matched the name; add
 geocode_rejected,Woodlands Regional Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
 geocode_rejected,Rochor Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
 merged,Stamford House,merged into 'Capitol Building' (same postal code 178906)
+existing_hpm_added,Buangkok Square,missing from the Wikipedia registry; added from existing_hpm.csv (BUANGKOK SQUARE)
+existing_hpm_added,Bugis Street,missing from the Wikipedia registry; added from existing_hpm.csv (BUGIS STREET)
+existing_hpm_added,Bukit Panjang Plaza,missing from the Wikipedia registry; added from existing_hpm.csv (BUKIT PANJANG PLAZA)
+existing_hpm_added,Hougang Rivercourt,missing from the Wikipedia registry; added from existing_hpm.csv (HOUGANG RIVERCOURT)
+existing_hpm_added,KINEX,missing from the Wikipedia registry; added from existing_hpm.csv (KINEX)
+existing_hpm_added,Northshore Plaza,missing from the Wikipedia registry; added from existing_hpm.csv (NORTHSHORE PLAZA I)
+existing_hpm_added,Plantation Plaza,missing from the Wikipedia registry; added from existing_hpm.csv (PLANTATION PLAZA)
+existing_hpm_added,Tekka Place,missing from the Wikipedia registry; added from existing_hpm.csv (TEKKA PLACE)
+existing_hpm_added,Terminal 3,missing from the Wikipedia registry; added from existing_hpm.csv (CHANGI AIRPORT TERMINAL 3 BUILDING)
+existing_hpm_added,United Square,missing from the Wikipedia registry; added from existing_hpm.csv (UNITED SQUARE)
+existing_hpm_added,Velocity @ Novena Square,missing from the Wikipedia registry; added from existing_hpm.csv (VELOCITY @ NOVENA SQUARE)
+existing_hpm_added,YewTee Point,missing from the Wikipedia registry; added from existing_hpm.csv (YEWTEE POINT)
+existing_hpm_added,Zhongshan Mall,missing from the Wikipedia registry; added from existing_hpm.csv (ZHONGSHAN MALL)
+existing_hpm_added,Kampung Admiralty,missing from the Wikipedia registry; added from existing_hpm.csv (KAMPUNG ADMIRALTY)
+existing_hpm_added,Paya Lebar Quarter,missing from the Wikipedia registry; added from existing_hpm.csv (PAYA LEBAR QUARTER)

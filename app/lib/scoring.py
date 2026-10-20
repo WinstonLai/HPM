@@ -17,6 +17,10 @@ from scoring_formula import (  # noqa: F401,E402
     PROXY_CATEGORIES,
     SUPPLY_BLOCK_WEIGHT,
     add_strategic_quadrant,
+    component_auc,
     compute_index,
     exclude_proxies,
+    hpm_backtest,
+    rank_stability,
+    scenario_comparison,
 )

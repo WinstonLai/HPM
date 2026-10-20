@@ -35,10 +35,16 @@ if tiers:
 st.caption(f"Showing {len(filtered)} of {len(df)} malls (default illustrative weights — "
            "adjust weights on the What-If Simulator page).")
 
+if "daytime_led" in filtered.columns:
+    filtered = filtered.assign(catchment=filtered["daytime_led"].map({1: "Daytime-led", 0: "Residential"}))
+else:
+    filtered = filtered.assign(catchment="")
+
 st.dataframe(
     filtered[["rank", "name", "region", "operator", "hpm_index", "tier",
-              "supply_score", "demand_score"]]
+              "supply_score", "demand_score", "catchment"]]
     .rename(columns={
+        "catchment": "Catchment",
         "rank": "Rank", "name": "Mall", "region": "Region", "operator": "Operator",
         "hpm_index": "Score", "tier": "Tier",
         "supply_score": "Supply Readiness", "demand_score": "Demand Opportunity",
@@ -47,4 +53,8 @@ st.dataframe(
     hide_index=True,
     use_container_width=True,
     height=650,
+)
+st.caption(
+    "**Catchment**: *Daytime-led* means the area within ~2km has more workers than residents "
+    "(CBD, Orchard, airport), where residents-only Reach understates the people around the mall."
 )

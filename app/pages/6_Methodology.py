@@ -91,10 +91,11 @@ CATEGORY_INFO = [
      "tell us which ones stock healthier-choice ranges.",
      "HPB: Healthier Eateries, Healthier Dining Partners · NEA: Supermarket Licences"),
     ("B_fitness_score", "Supply", "🏋️", "Physical Activity",
-     "Gyms@SG gyms plus SportSG sport centres/stadiums/swimming complexes within ~200m "
-     "of the mall. Fitness studios and activity-oriented tenants (e.g. sports retailers) "
-     "are not in any public dataset and aren't counted.",
-     "HPB: Gyms@SG · SportSG: Sport Facilities"),
+     "Gyms@SG gyms, SportSG sport centres/stadiums/swimming complexes, and commercial gyms and "
+     "fitness studios from OpenStreetMap (OSM venues that duplicate a listed one are dropped), "
+     "within ~200m of the mall. OSM coverage of small studios is patchy, and sports retailers "
+     "and other activity-oriented tenants are not counted.",
+     "HPB: Gyms@SG · SportSG: Sport Facilities · OpenStreetMap contributors"),
     ("C_engagement_score", "Supply", "🤝", "H365 & HPB Engagement",
      "A proxy: the number of People's Association Community Clubs / PAssion WaVe outlets "
      "within ~500m. No public dataset of actual H365 event locations exists (see Section 5).",
@@ -104,10 +105,11 @@ CATEGORY_INFO = [
      "name), plus HSA-licensed pharmacies whose listed address contains the mall's name.",
      "MOH: CHAS Clinics · HSA: Licensed Pharmacies"),
     ("E_infra_score", "Supply", "🌳", "Healthy Infrastructure",
-     "A count of HPB Parks@SG parks, plus NParks **playgrounds and fitness areas only**, within "
-     "~500m, plus bicycle-rack locations within ~200m. (NParks' file also lists carparks, "
-     "noticeboards, toilets, etc.; those are excluded.) Water refill points, quiet corners and "
-     "walkability — also in the charter — have no usable data and aren't counted.",
+     "A count of HPB Parks@SG parks, plus NParks **playgrounds, fitness areas, drinking fountains "
+     "(water refill points) and foot-relax stations only**, within ~500m, plus bicycle-rack "
+     "locations within ~200m. (NParks' file also lists carparks, noticeboards, toilets, etc.; "
+     "those are excluded.) These are park facilities near the mall, not facilities inside it. "
+     "Quiet corners and walkability — also in the charter — have no usable data and aren't counted.",
      "HPB: Parks@SG · NParks: Park Facilities · LTA: Bicycle Rack"),
     ("F_partnership_score", "Supply", "🏢", "Partnership Readiness",
      "A proxy, not a record of partnerships: the number of malls in this list that share the "
@@ -117,14 +119,18 @@ CATEGORY_INFO = [
      "Landlord and partnership facts can be supplied in data/manual/operators.csv.",
      "Wikipedia infobox (owner › management › developer) · hpb.gov.sg · data/manual/operators.csv"),
     ("reach_population_score", "Demand", "👨‍👩‍👧", "Reach & Population",
-     "70% total + 30% senior (65+) *resident* population (Census 2020) of the URA subzones "
-     "whose centroid lies within ~1.2km of the mall. Each of the two measures is scaled "
-     "0–100 separately, then combined 70/30. Whole-subzone totals are used — they are not "
-     "pro-rated by area.",
-     "SingStat: Census 2020 resident population by subzone · URA: subzone boundaries"),
+     "50% residents + 30% seniors (65+) + 20% workers, each scaled 0–100 separately. People are "
+     "counted by **distance**: a subzone's people count fully at the mall and fade linearly to "
+     "nothing at 2km (measured to the subzone's centroid), so a subzone just across a line no "
+     "longer vanishes. Workers are employed residents by planning area of *workplace* (Census "
+     "2020), spread over that area's subzones by land area — so this is a coarse daytime signal "
+     "that misses foreign workers and visitors.",
+     "SingStat: Census 2020 residents by subzone, employed residents by workplace area · URA: subzone boundaries"),
     ("accessibility_score", "Demand", "🚌", "Accessibility",
-     "50% MRT station exits within ~1.2km + 50% bus stops within ~400m. Each count is scaled "
-     "0–100 separately, then averaged.",
+     "50% MRT + 50% bus. MRT counts each **station** once (the LTA file has one row per exit, so "
+     "an interchange used to look like many stations) and weights nearer stations more: a station "
+     "adds 1 at the mall, fading to 0 at 1.2km. Bus stops fade to 0 at 400m. Each is scaled "
+     "0–100 separately, then averaged. Bus stops are counted, not bus services.",
      "LTA: MRT Station Exits, Bus Stops"),
     ("engagement_gap_score", "Demand", "📊", "Engagement Gap",
      "The charter's \"untapped demand\" (low healthy-dining exposure, under-served locations), "
@@ -212,12 +218,13 @@ st.markdown(
 **What we actually do:** we don't have a public directory of every mall's *total* tenant
 count (the figure the charter's example divides by), so we **cannot** compute the charter's
 "% of outlets" metric. Instead each category's raw amenity count is **min-max scaled to
-0–100 across all {n_malls} malls**:
+0–100 across all {n_malls} malls**, after capping at the 95th percentile:
 
-> `score = (mall's count − lowest count in the list) / (highest count in the list − lowest count) × 100`
+> `score = (min(count, cap) − lowest count) / (cap − lowest count) × 100`, where `cap` is the 95th-percentile count
 
-The mall with the fewest in a category scores 0, the mall with the most scores 100, and
-everyone else falls proportionally in between.
+The mall with the fewest in a category scores 0; the mall at or above the cap (roughly the top 5%)
+scores 100, and everyone else falls proportionally in between. The cap stops one very large
+mall from squashing everyone else's score.
 
 **What this does and doesn't fix.** Min-max scaling puts nine very different measures
 (outlet counts, residents, bus stops…) onto one comparable 0–100 scale so they can be
@@ -225,10 +232,11 @@ weighted and added. It is a *linear* rescale of the raw count, so **within a cat
 mall ranking is identical to the raw-count ranking — it does not remove the "bigger malls
 have more of everything" bias** that the charter warns about. Two further effects follow:
 
-- A single outlier compresses everyone else (e.g. the Healthy Infrastructure count has a median
-  of {int(category_scores['E_infra_count'].median())} but a maximum of
-  {int(category_scores['E_infra_count'].max())}, so the typical mall scores only
-  {category_scores['E_infra_score'].median():.0f}/100 on it).
+- Counts are capped at the 95th percentile, so the top ~5% of malls tie at 100 in each category
+  (e.g. Healthy Infrastructure ranges up to {int(category_scores['E_infra_count'].max())}, but the
+  cap is {category_scores['E_infra_count'].quantile(0.95):.0f}). Without the cap a single outlier
+  dragged everyone else down, and the categories' *effective* influence drifted far from their
+  nominal weights (see Section 6).
 - The Engagement Gap factor is the one exception: it is scaled by rank, not min-max
   (see Section 2).
 - Scores are relative to this list — adding or removing malls changes every score.
@@ -236,12 +244,15 @@ have more of everything" bias** that the charter warns about. Two further effect
 )
 
 with st.expander("See this scaling on real data — Healthy Dining"):
-    lo, hi = category_scores["A_dining_count"].min(), category_scores["A_dining_count"].max()
-    example_count = int(round((lo + hi) / 2))
+    lo = category_scores["A_dining_count"].min()
+    hi = category_scores["A_dining_count"].max()
+    cap = category_scores["A_dining_count"].quantile(0.95)
+    example_count = int(round((lo + cap) / 2))
     st.markdown(
         f"Across all {len(category_scores)} malls, the Healthy Dining count ranges "
-        f"from **{lo}** to **{hi}**. So a mall with **{example_count}** would score "
-        f"**{(example_count - lo) / (hi - lo) * 100:.0f}/100** on this category."
+        f"from **{lo}** to **{hi}**, and the 95th-percentile cap is **{cap:.0f}**. So a mall with "
+        f"**{example_count}** would score **{(example_count - lo) / (cap - lo) * 100:.0f}/100** on "
+        f"this category, and any mall with {cap:.0f} or more scores 100."
     )
 
 st.divider()
@@ -382,7 +393,7 @@ raw_cols = {
     "Healthcare": "D_healthcare_count",
     "Healthy Infrastructure": "E_infra_count",
     "Population catchment": "pop_catchment",
-    "MRT exits": "mrt_count",
+    "MRT stations within 1.2km": "mrt_count",
 }
 coverage = [
     {"Category": label, "Malls with a count of 0": int((category_scores[col] == 0).sum()),
@@ -412,24 +423,32 @@ st.markdown(
 - **Supermarket presence counts any licensed supermarket**, not specifically ones "with
   healthier choice options" as the charter names it.
 - **Catchments are straight-line circles, not mall footprints.** Counts within 200m / 500m
-  (and 1.2km / 400m for demand) include amenities that belong to neighbouring buildings, so
-  malls in dense clusters (e.g. Orchard) share and double-count the same amenities.
+  (and 1.2km / 400m for demand) include amenities that belong to neighbouring buildings. To stop
+  malls in dense clusters (e.g. Orchard, Bugis) each claiming the same eatery, gym, clinic or bike
+  rack, those on-site amenities count for their *nearest* mall only. Parks and community clubs
+  (500m) and the demand-side catchments are still shared, because they genuinely serve several malls.
 - **Address-text matching depends on naming.** Healthier Dining Partners, pharmacies and
   supermarkets have no coordinates; they only count if the mall's name appears in the
   outlet's address (matched as a whole phrase). Outlets listed by street address alone are
   missed, so those categories are more likely to under-count.
-- **Population is residents only, from Census 2020.** Worker, visitor and non-resident
-  populations (which the charter lists) are not included. Subzones are placed by an
-  approximate centroid (a simple average of boundary points, not the exact boundary), and a
-  subzone's whole population is counted if its centroid is within 1.2km, otherwise none of
-  it is — so a mall at the edge of a large subzone can be under- or over-counted.
-- **Several charter measures aren't scored at all** because no public data exists:
-  fitness studios and activity-oriented tenants, water refill points, quiet corners,
-  walkability, Healthier SG providers, event history, and landlord willingness.
+- **Population is mostly residents, from Census 2020.** Workers are included but only as employed
+  *residents*, published per planning area and spread over its subzones by land area; foreign
+  workers, tourists and other visitors (which the charter also lists) are not. Subzones are placed
+  by an approximate centroid (a simple average of boundary points, not the exact boundary), so a
+  mall beside a very large subzone can still be under- or over-counted. The Engagement Gap keeps
+  a hard 1.2km circle of residents, to match the circle its amenity counts use.
+- **Several charter measures aren't scored** because no usable data exists: quiet corners and
+  calm rooms, walkability, Healthier SG providers, event history, and landlord willingness.
+  Fitness studios and water refill points are only partly covered (OpenStreetMap venues; park
+  drinking fountains).
 - **Geocoding is validated, not manual.** OneMap's first hit is often the wrong building, so each
   mall is only placed on a OneMap result whose building name matches the mall's name; malls with no
   such result are dropped (listed in `data/processed/registry_qa.csv`) unless a fix is supplied in
   `data/manual/geocode_overrides.csv`. A matching name is still not proof the point is right.
+- **The mall list is incomplete.** It comes from Wikipedia, which missed 14 of the 48 malls HPB
+  already designates as HPMs (they were added from HPB's list). Other malls, especially newer
+  or suburban ones, are probably missing too, and malls added from HPB's list have no landlord
+  recorded.
 - **Mall operator names are free text** from Wikipedia infoboxes (owner, else management, else
   developer). Known variants of one landlord are merged by hand in `data/manual/operator_aliases.csv`,
   but new variants will not be merged automatically.
@@ -437,3 +456,96 @@ st.markdown(
 Full source citations and dataset IDs are in the project's `README.md`.
 """
 )
+
+st.divider()
+
+# --------------------------------------------------------------------------------
+st.header("6. How robust is the ranking?")
+st.markdown(
+    """
+Every ranking here rests on weights that are judgement calls, so it is worth knowing how much they
+matter. Two checks follow. Neither changes the defaults; they show how much of the shortlist survives
+other reasonable choices.
+"""
+)
+
+st.subheader("Other readings of the charter's weights")
+st.dataframe(scoring.scenario_comparison(category_scores), hide_index=True, use_container_width=True)
+st.caption(
+    "The charter is ambiguous: its category weights (25/20/15/10/10/10 plus Demand Potential 10) sum to "
+    "100 with Supply at 90%, yet its composite formula says Supply 70% / Demand 30%. The default follows "
+    "the 70/30 formula and rescales the six Supply weights; the \"literal\" row shows the other reading. "
+    "**This interpretation still needs sign-off from HPB CIP.**"
+)
+
+st.subheader("Rank stability under random re-weighting")
+stability = scoring.rank_stability(category_scores)
+top = stability.head(20)
+st.caption(
+    "500 random weightings: Supply and Demand sub-weights are drawn around the defaults, and Supply's share "
+    "of the index varies between 60% and 80%. The bar shows the 5th–95th percentile rank of each mall."
+)
+fig = px.scatter(
+    top, x="median_rank", y="name", error_x=top["rank_p95"] - top["median_rank"],
+    error_x_minus=top["median_rank"] - top["rank_p5"],
+    labels={"median_rank": "Rank (median, with 5th–95th percentile range)", "name": ""},
+)
+fig.update_yaxes(autorange="reversed")
+fig.update_layout(height=520, margin=dict(l=0, r=0, t=10, b=0))
+st.plotly_chart(fig, use_container_width=True)
+solid = int((stability.head(10)["pct_top10"] >= 80).sum())
+st.markdown(
+    f"**{solid} of the default Top 10** stay in the Top 10 in at least 80% of the re-weightings; the rest "
+    "are close calls that a small weight change can swap with the next few malls."
+)
+st.dataframe(
+    top[["default_rank", "name", "median_rank", "rank_p5", "rank_p95", "pct_top10", "pct_top20", "pct_top50"]]
+    .rename(columns={"default_rank": "Default rank", "name": "Mall", "median_rank": "Median rank",
+                     "rank_p5": "Best (p5)", "rank_p95": "Worst (p95)", "pct_top10": "% in Top 10",
+                     "pct_top20": "% in Top 20", "pct_top50": "% in Top 50"})
+    .style.format({"Median rank": "{:.0f}", "Best (p5)": "{:.0f}", "Worst (p95)": "{:.0f}",
+                   "% in Top 10": "{:.0f}", "% in Top 20": "{:.0f}", "% in Top 50": "{:.0f}"}),
+    hide_index=True, use_container_width=True,
+)
+
+weights = scoring.DEFAULT_SUPPLY_WEIGHTS
+nominal = {k: v / sum(weights.values()) * 100 for k, v in weights.items()}
+spread = {k: category_scores[k].std() * weights[k] for k in weights}
+effective = {k: v / sum(spread.values()) * 100 for k, v in spread.items()}
+st.subheader("Nominal vs effective weight")
+st.dataframe(
+    pd.DataFrame({
+        "Category": [scoring.CATEGORY_LABELS[k] for k in weights],
+        "Nominal weight (%)": [round(nominal[k], 1) for k in weights],
+        "Effective share of Supply variation (%)": [round(effective[k], 1) for k in weights],
+    }),
+    hide_index=True, use_container_width=True,
+)
+st.caption(
+    "A category's weight only matters in proportion to how much malls differ on it. Where the effective share "
+    "is well below the nominal weight (typically a category most malls score 0 on, such as Partnership "
+    "Readiness), moving its slider changes the ranking less than the label suggests."
+)
+
+if "A_healthier_share" in category_scores.columns:
+    with st.expander("Experiment: the charter's \"% of F&B outlets\" for Healthy Dining (not in the index)"):
+        reliable = category_scores["A_healthier_share"].notna()
+        overshoot = int((category_scores["A_hdp_outlets"] > category_scores["A_fnb_osm_count"]).sum())
+        corr = category_scores.loc[reliable, "A_healthier_share"].rank().corr(
+            category_scores.loc[reliable, "A_hdp_outlets"].rank())
+        st.markdown(
+            f"""
+The charter wants healthier outlets as a **share** of a mall's F&B outlets. There is no public tenant
+directory, so as an experiment we divided HPB healthier-eatery outlets within ~200m by the F&B outlets
+OpenStreetMap lists in the same area (restaurants, cafes, fast food, food courts), for the
+{int(reliable.sum())} malls with at least 5 mapped F&B outlets.
+
+- It is **not used in the score**: in {overshoot} malls HPB lists *more* healthier outlets than OSM maps F&B
+  outlets in total, so OSM is clearly incomplete inside malls and the ratio can exceed 100%.
+- Where it can be computed it tracks the plain count closely (rank correlation {corr:.2f}), so it would
+  not change the shortlist much until the denominator is better.
+
+The columns `A_hdp_outlets`, `A_fnb_osm_count` and `A_healthier_share` are in `category_scores.csv` for
+review. A real tenant count from mall directories or landlords would make this metric usable.
+"""
+        )

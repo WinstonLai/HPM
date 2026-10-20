@@ -10,6 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from datagovsg import fetch_dataset  # noqa: E402
+import osm  # noqa: E402
 
 # category -> list of (dataset_id, filename, publisher)
 DATASETS: dict[str, list[tuple[str, str, str]]] = {
@@ -43,6 +44,9 @@ DATASETS: dict[str, list[tuple[str, str, str]]] = {
         ("d_8594ae9ff96d0c708bc2af633048edfb", "subzone_boundary.geojson", "URA"),
         ("d_b39d3a0871985372d7e1637193335da5", "mrt_station_exits.geojson", "LTA"),
         ("d_3f172c6feb3f4f92a2f47d93eed2908a", "bus_stops.geojson", "LTA"),
+        # Employed residents by planning area of WORKPLACE (Census 2020): a
+        # daytime-population signal for CBD / airport / office-heavy malls.
+        ("d_22063c84778e6535b92b4d8f93fd2525", "workers_by_workplace_pa_2020.csv", "SingStat"),
     ],
 }
 
@@ -56,6 +60,9 @@ def download_all(force: bool = False) -> None:
                 print(f"  -> {path} ({path.stat().st_size / 1024:.0f} KB)")
             except Exception as exc:  # noqa: BLE001
                 print(f"  [error] {filename}: {exc}")
+    # Not on data.gov.sg: OpenStreetMap extracts (commercial fitness venues,
+    # F&B outlets) via Overpass.
+    osm.download_all(force=force)
 
 
 if __name__ == "__main__":
