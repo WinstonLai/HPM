@@ -4,6 +4,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -37,7 +38,7 @@ subset = df[df["name"].isin(names)].set_index("name")
 fig = go.Figure()
 for name in names:
     row = subset.loc[name]
-    values = [row[c] for c in RADAR_COLS]
+    values = [None if pd.isna(row[c]) else row[c] for c in RADAR_COLS]  # n/a factors leave a gap
     fig.add_trace(go.Scatterpolar(
         r=values + [values[0]],
         theta=[scoring.CATEGORY_LABELS[c] for c in RADAR_COLS] + [scoring.CATEGORY_LABELS[RADAR_COLS[0]]],
@@ -56,7 +57,7 @@ st.subheader("Strengths and weaknesses")
 cols = st.columns(len(names))
 for col, name in zip(cols, names):
     row = subset.loc[name]
-    scores = {scoring.CATEGORY_LABELS[c]: row[c] for c in RADAR_COLS}
+    scores = {scoring.CATEGORY_LABELS[c]: row[c] for c in RADAR_COLS if pd.notna(row[c])}
     best = max(scores, key=scores.get)
     worst = min(scores, key=scores.get)
     with col:

@@ -13,6 +13,18 @@ is only 70% of the final index and Category G ("Demand Potential") is
 represented by the separate Reach/Accessibility/Engagement-Gap block rather
 than as a seventh flat weight.
 
+Categories C (H365 & HPB Engagement) and F (Partnership Readiness) are
+PROXIES -- no public dataset measures the real thing -- and are coarse (C only
+takes the values 0/50/100; F is non-zero for only a handful of malls). They
+therefore start below the charter's illustrative weights (C 15 -> 10,
+F 10 -> 5), and can be switched off entirely on the What-If Simulator via
+`exclude_proxies`. The charter values are kept in CHARTER_SUPPLY_WEIGHTS.
+
+A factor that is NaN for a mall means "not applicable" (e.g. Engagement Gap
+for a mall with no residents in its catchment); that factor is left out and
+the mall's block score is re-weighted over its remaining factors, rather than
+being scored as a zero.
+
 This module is imported both by the one-off ETL build step (etl/build_index.py,
 which produces the default static ranking) and by the Streamlit "What-If
 Simulator" page (app/lib/scoring.py), so a slider change and the offline
@@ -22,14 +34,25 @@ from __future__ import annotations
 
 import pandas as pd
 
-# --- Supply Readiness sub-weights (charter's illustrative weights, renormalised to 100) ---
-_RAW_SUPPLY_WEIGHTS = {
+# --- Supply Readiness sub-weights (renormalised to 100) ---
+# The charter's illustrative weights, for reference / the Methodology page.
+CHARTER_SUPPLY_WEIGHTS = {
     "A_dining_score": 25,
     "B_fitness_score": 20,
     "C_engagement_score": 15,   # "H365 Presence" in the composite formula
     "D_healthcare_score": 10,
     "E_infra_score": 10,
     "F_partnership_score": 10,
+}
+# Categories scored with a proxy rather than the metric the charter names.
+PROXY_CATEGORIES = ("C_engagement_score", "F_partnership_score")
+_RAW_SUPPLY_WEIGHTS = {
+    "A_dining_score": 25,
+    "B_fitness_score": 20,
+    "C_engagement_score": 10,   # proxy (community-club proximity): charter 15
+    "D_healthcare_score": 10,
+    "E_infra_score": 10,
+    "F_partnership_score": 5,   # proxy (landlord portfolio size): charter 10
 }
 _SUPPLY_WEIGHT_SUM = sum(_RAW_SUPPLY_WEIGHTS.values())
 DEFAULT_SUPPLY_WEIGHTS = {k: v / _SUPPLY_WEIGHT_SUM * 100 for k, v in _RAW_SUPPLY_WEIGHTS.items()}
@@ -59,13 +82,26 @@ CATEGORY_LABELS = {
 TIERS = ["Bronze", "Silver", "Gold", "Platinum"]
 
 
+def exclude_proxies(weights: dict) -> dict:
+    """`weights` with the proxy categories (C, F) zeroed. The remaining
+    weights are re-normalised by compute_index, so the others scale up."""
+    return {k: (0 if k in PROXY_CATEGORIES else v) for k, v in weights.items()}
+
+
 def _weighted_sum(df: pd.DataFrame, weights: dict) -> pd.Series:
-    total_weight = sum(weights.values()) or 1.0
-    score = pd.Series(0.0, index=df.index)
+    """Weighted average of the given score columns. A NaN score means "not
+    applicable" and drops that factor (and its weight) for that row only; a
+    column missing from `df` entirely counts as a score of 0."""
+    num = pd.Series(0.0, index=df.index)
+    den = pd.Series(0.0, index=df.index)
     for col, w in weights.items():
         if col in df.columns:
-            score = score + df[col].fillna(0) * w
-    return score / total_weight
+            present = df[col].notna()
+            num = num + df[col].fillna(0) * w * present
+            den = den + w * present
+        else:
+            den = den + w
+    return (num / den.where(den > 0)).fillna(0.0)
 
 
 def compute_index(

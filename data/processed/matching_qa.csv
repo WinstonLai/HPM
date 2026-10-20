@@ -1,0 +1,15 @@
+dataset,mall,n_far_name_matches,max_distance_m
+healthier_eateries,SingPost,6,5857
+healthier_eateries,Bukit Timah Shopping Centre,3,574
+healthier_eateries,Marina Bay Sands,1,1308
+healthier_eateries,Bedok Mall,1,2024
+healthier_eateries,Katong Shopping Centre,1,639
+healthier_eateries,Punggol Plaza,1,1838
+healthier_eateries,The Seletar Mall,1,9185
+healthier_eateries,West Coast Plaza,1,1168
+healthier_eateries,West Mall,1,21047
+healthier_eateries,HarbourFront Centre,1,2229
+healthier_eateries,International Plaza,1,3744
+healthier_eateries,Boon Lay Shopping Centre,1,1138
+healthier_eateries,Potong Pasir,1,516
+chas_clinics,Bukit Timah Shopping Centre,1,567
