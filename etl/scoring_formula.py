@@ -82,6 +82,21 @@ CATEGORY_LABELS = {
 
 TIERS = ["Bronze", "Silver", "Gold", "Platinum"]
 
+# Minimum HPM Index for each tier; anything below Silver is Bronze. Absolute
+# bands (not rank quartiles), so a tier count can actually change when the
+# weights or the mall list change. The index is itself relative -- every
+# category is scaled against the best malls in this list -- so these cut-offs
+# say "high within this list", not "certified ready". They are a judgement
+# call; the What-If Simulator lets users move them.
+TIER_THRESHOLDS = {"Platinum": 50.0, "Gold": 35.0, "Silver": 20.0}
+
+
+def assign_tiers(index: pd.Series, thresholds: dict | None = None) -> pd.Series:
+    """Bronze/Silver/Gold/Platinum from absolute HPM Index cut-offs."""
+    t = thresholds or TIER_THRESHOLDS
+    bins = [-np.inf, t["Silver"], t["Gold"], t["Platinum"], np.inf]
+    return pd.cut(index, bins=bins, labels=TIERS, right=False)
+
 
 def exclude_proxies(weights: dict) -> dict:
     """`weights` with the proxy categories (C, F) zeroed. The remaining
@@ -111,10 +126,12 @@ def compute_index(
     demand_weights: dict | None = None,
     supply_block_weight: float = SUPPLY_BLOCK_WEIGHT,
     demand_block_weight: float = DEMAND_BLOCK_WEIGHT,
+    tier_thresholds: dict | None = None,
 ) -> pd.DataFrame:
     """Return a copy of `category_scores` with supply_score, demand_score,
     hpm_index, rank, and tier columns computed from the given weights
-    (falling back to the charter's illustrative defaults)."""
+    (falling back to the charter's illustrative defaults). Tiers use
+    absolute cut-offs (`tier_thresholds`, default TIER_THRESHOLDS)."""
     supply_weights = supply_weights or DEFAULT_SUPPLY_WEIGHTS
     demand_weights = demand_weights or DEFAULT_DEMAND_WEIGHTS
 
@@ -129,18 +146,7 @@ def compute_index(
 
     df = df.sort_values("hpm_index", ascending=False).reset_index(drop=True)
     df["rank"] = df.index + 1
-    # Cut on `rank` (always unique, 1..n) rather than `hpm_index` (which can
-    # have ties) so duplicates="drop" never collapses the bin count below
-    # len(TIERS) and raises. With fewer malls than tiers, shrink the label
-    # set instead of crashing.
-    n_bins = min(4, df["rank"].nunique())
-    # rank=1 is the best mall, so bins of ascending rank get labels in
-    # descending tier order (best rank -> Platinum, worst rank -> Bronze).
-    tier_labels = list(reversed(TIERS))[:n_bins]
-    if n_bins:
-        df["tier"] = pd.qcut(df["rank"], q=n_bins, labels=tier_labels, duplicates="drop")
-    else:
-        df["tier"] = pd.Series(dtype=object)
+    df["tier"] = assign_tiers(df["hpm_index"], tier_thresholds)
     n = len(df)
     df["top10"] = df["rank"] <= min(10, n)
     df["top20"] = df["rank"] <= min(20, n)
@@ -166,10 +172,15 @@ def strategic_quadrant(row) -> str:
     return "Future Monitoring"
 
 
-def add_strategic_quadrant(df: pd.DataFrame) -> pd.DataFrame:
+def add_strategic_quadrant(df: pd.DataFrame, supply_cut: float | None = None,
+                           demand_cut: float | None = None) -> pd.DataFrame:
+    """Assign the 2x2 quadrant. A mall is "high" on an axis when its score is at
+    or above the cut-off, which defaults to that axis's median -- so by default
+    about half of all malls are "high" on each axis however low the scores are.
+    Pass absolute `supply_cut` / `demand_cut` for a fixed bar instead."""
     df = df.copy()
-    supply_med = df["supply_score"].median()
-    demand_med = df["demand_score"].median()
+    supply_med = df["supply_score"].median() if supply_cut is None else supply_cut
+    demand_med = df["demand_score"].median() if demand_cut is None else demand_cut
     df["supply_high"] = df["supply_score"] >= supply_med
     df["demand_high"] = df["demand_score"] >= demand_med
     df["quadrant"] = df.apply(strategic_quadrant, axis=1)
@@ -194,6 +205,9 @@ def rank_stability(
     seed: int = 7,
     concentration: float = 60.0,
     supply_block_range: tuple[float, float] = (60.0, 80.0),
+    supply_weights: dict | None = None,
+    demand_weights: dict | None = None,
+    supply_block_weight: float | None = None,
 ) -> pd.DataFrame:
     """Re-rank every mall under `n_draws` randomly perturbed weightings and
     report how stable each rank is. Supply and Demand sub-weights are drawn
@@ -201,11 +215,20 @@ def rank_stability(
     `concentration` = tighter), and the Supply share of the index is drawn
     uniformly from `supply_block_range`. Columns: default_rank, median_rank,
     rank_p5/p95 (the 5th/95th percentile rank), pct_top10/20/50 (share of
-    draws in which the mall makes that shortlist)."""
+    draws in which the mall makes that shortlist).
+
+    By default the draws are centred on the default weights; pass
+    `supply_weights` / `demand_weights` / `supply_block_weight` to centre them
+    on a custom weighting (the Supply share then varies +/-10 points around
+    it), so the What-If Simulator can show how fragile *its* shortlist is."""
     rng = np.random.default_rng(seed)
-    s_cols, d_cols = list(DEFAULT_SUPPLY_WEIGHTS), list(DEFAULT_DEMAND_WEIGHTS)
-    s0 = np.array(list(DEFAULT_SUPPLY_WEIGHTS.values()), dtype=float)
-    d0 = np.array(list(DEFAULT_DEMAND_WEIGHTS.values()), dtype=float)
+    supply_weights = supply_weights or DEFAULT_SUPPLY_WEIGHTS
+    demand_weights = demand_weights or DEFAULT_DEMAND_WEIGHTS
+    s_cols, d_cols = list(supply_weights), list(demand_weights)
+    s0 = np.maximum(np.array(list(supply_weights.values()), dtype=float), 1e-3)
+    d0 = np.maximum(np.array(list(demand_weights.values()), dtype=float), 1e-3)
+    if supply_block_weight is not None:
+        supply_block_range = (max(0.0, supply_block_weight - 10.0), min(100.0, supply_block_weight + 10.0))
     Ws = rng.dirichlet(concentration * s0 / s0.sum(), size=n_draws).T
     Wd = rng.dirichlet(concentration * d0 / d0.sum(), size=n_draws).T
     block = rng.uniform(*supply_block_range, size=n_draws) / 100.0
@@ -215,7 +238,11 @@ def rank_stability(
     index = supply * block + demand * (1.0 - block)            # (malls, draws)
     ranks = (-index).argsort(axis=0).argsort(axis=0) + 1
 
-    base = compute_index(category_scores)[["mall_id", "name", "rank"]].rename(columns={"rank": "default_rank"})
+    base = compute_index(
+        category_scores, supply_weights=supply_weights, demand_weights=demand_weights,
+        supply_block_weight=SUPPLY_BLOCK_WEIGHT if supply_block_weight is None else supply_block_weight,
+        demand_block_weight=DEMAND_BLOCK_WEIGHT if supply_block_weight is None else 100 - supply_block_weight,
+    )[["mall_id", "name", "rank"]].rename(columns={"rank": "default_rank"})
     order = category_scores.reset_index(drop=True)[["mall_id"]]
     out = order.merge(base, on="mall_id", how="left")
     out["median_rank"] = np.median(ranks, axis=1)

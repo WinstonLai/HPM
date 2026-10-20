@@ -39,9 +39,19 @@ streamlit run app/Home.py
 
 # Sanity-check all Python files compile
 python -m py_compile etl/*.py app/*.py app/lib/*.py app/pages/*.py
+
+# Tests (ETL logic: geocode validation, matching, scoring, registry merging, validators)
+pip install -r requirements-dev.txt && pytest
+
+# Cheap registry maintenance (no re-scrape / re-geocode)
+python etl/build_mall_registry.py --add-existing-hpms   # after editing data/manual/existing_hpm.csv
+python etl/build_mall_registry.py --refresh-types       # after editing data/manual/mall_types.csv
+python etl/build_mall_registry.py --dedupe              # merge duplicate malls in the current malls.csv
 ```
 
-There is no test suite, linter config, or CI in this repo. `data/processed/*.csv`
+There is a pytest suite for the ETL logic (`tests/`) but no linter config or CI.
+Each stage validates its output (`etl/validate.py`) and records provenance in
+`data/processed/_meta.json` (`etl/provenance.py`). `data/processed/*.csv`
 is committed (so the dashboard runs without an ETL pass); `data/raw/` is
 gitignored (large cached downloads, rebuildable via the ETL scripts).
 
@@ -114,6 +124,13 @@ Two independent halves connected only through `data/processed/*.csv`:
    Each page file does its own `sys.path.insert` to reach `app/lib/`
    (there's no package `__init__.py`; pages are run as standalone scripts
    by Streamlit).
+
+**Custom weights are shared across pages.** The What-If Simulator saves its
+settings under a plain `st.session_state` key (`app/lib/weights.py`), because
+Streamlit drops slider values when their page is not rendered; every page gets
+its ranking from `weights.load_index()` (default CSV unless settings differ) and
+shows `weights.show_banner()`. Tiers are fixed cut-offs on the HPM Index
+(`TIER_THRESHOLDS`), not rank quartiles.
 
 **`etl/scoring_formula.py` is the single source of truth for the composite
 index formula.** It's imported both by `build_index.py` (the offline default

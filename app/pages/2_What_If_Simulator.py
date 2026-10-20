@@ -1,20 +1,25 @@
-"""Page 3 - What-If Simulator: reweight categories live, ranking updates instantly."""
+"""Page 3 - What-If Simulator: reweight categories live, ranking updates instantly.
+The weights chosen here apply to every other page too (see app/lib/weights.py)."""
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
+import pandas as pd
+import plotly.express as px
 import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 import data_loader  # noqa: E402
 import scoring  # noqa: E402
+import weights  # noqa: E402
 
 st.set_page_config(page_title="What-If Simulator | HPM Dashboard", page_icon="🎚️", layout="wide")
 st.title("🎚️ What-If Simulator")
 st.caption(
-    "Adjust category weights and the overall Supply/Demand split — the ranking, tiers, "
-    "and Top 10/20/50 shortlists below recompute instantly."
+    "Adjust category weights, the overall Supply/Demand split and the tier cut-offs — the ranking, tiers, "
+    "and Top 10/20/50 shortlists below recompute instantly. Your settings carry over to every other page "
+    "until you reset them."
 )
 
 if not data_loader.data_available():
@@ -22,21 +27,9 @@ if not data_loader.data_available():
     st.stop()
 
 category_scores = data_loader.load_category_scores()
-
-
-def _integerize_to_100(weights: dict) -> dict:
-    """Largest-remainder rounding: convert arbitrary positive weights to
-    integers that sum to exactly 100 (naive round() can drift, e.g. three
-    equal 33.33s round to 99)."""
-    keys = list(weights.keys())
-    total = sum(weights.values()) or 1.0
-    scaled = [weights[k] / total * 100 for k in keys]
-    floors = [int(x) for x in scaled]
-    remainder = 100 - sum(floors)
-    order = sorted(range(len(keys)), key=lambda i: scaled[i] - floors[i], reverse=True)
-    for i in range(remainder):
-        floors[order[i]] += 1
-    return {keys[i]: floors[i] for i in range(len(keys))}
+default_index = data_loader.load_default_index()
+defaults = weights.default_settings()
+saved = weights.get_settings() or defaults
 
 
 def _rebalance(changed_key: str, group_keys: list[str]) -> None:
@@ -57,70 +50,98 @@ def _rebalance(changed_key: str, group_keys: list[str]) -> None:
     st.session_state[others[-1]] = max(0, remaining - allocated)
 
 
-def linked_weight_sliders(group_keys: list[str], defaults: dict, key_prefix: str) -> dict:
+def linked_weight_sliders(group_keys: list[str], initial: dict, key_prefix: str) -> dict:
     """Render a group of sliders that always sum to 100: moving one
-    proportionally redistributes the remaining budget across the rest."""
+    proportionally redistributes the remaining budget across the rest. Slider
+    values are restored from `initial` (the saved settings) when the widgets
+    have no state, e.g. after visiting another page."""
     session_keys = [f"{key_prefix}_{col}" for col in group_keys]
     if session_keys[0] not in st.session_state:
-        initial = _integerize_to_100(defaults)
         for col, skey in zip(group_keys, session_keys):
             st.session_state[skey] = initial[col]
 
-    weights = {}
+    out = {}
     for col, skey in zip(group_keys, session_keys):
         st.slider(
             scoring.CATEGORY_LABELS[col], 0, 100, key=skey,
             on_change=_rebalance, args=(skey, session_keys),
         )
-        weights[col] = st.session_state[skey]
-    return weights
+        out[col] = st.session_state[skey]
+    return out
 
 
 with st.sidebar:
+    st.button("Reset to defaults", on_click=weights.reset, use_container_width=True)
+
     st.header("Supply Readiness weights")
     st.caption("Sliders are linked and always sum to 100% — raising one lowers the rest proportionally.")
-    supply_weights = linked_weight_sliders(
-        list(scoring.DEFAULT_SUPPLY_WEIGHTS.keys()), scoring.DEFAULT_SUPPLY_WEIGHTS, "sw"
-    )
-
+    supply_sliders = linked_weight_sliders(list(scoring.DEFAULT_SUPPLY_WEIGHTS), saved["supply"], "sw")
+    if "exclude_proxies" not in st.session_state:
+        st.session_state["exclude_proxies"] = saved["exclude_proxies"]
     exclude_proxy_categories = st.checkbox(
         "Exclude proxy categories (H365 & HPB Engagement, Partnership Readiness)",
+        key="exclude_proxies",
         help="These two are stand-ins (community-club proximity, landlord portfolio size), not the "
              "metrics the charter names. Ticking this sets their weight to 0 and re-scales the rest.",
     )
 
     st.header("Demand Opportunity weights")
     st.caption("Also linked, summing to 100%.")
-    demand_weights = linked_weight_sliders(
-        list(scoring.DEFAULT_DEMAND_WEIGHTS.keys()), scoring.DEFAULT_DEMAND_WEIGHTS, "dw"
-    )
+    demand_sliders = linked_weight_sliders(list(scoring.DEFAULT_DEMAND_WEIGHTS), saved["demand"], "dw")
 
     st.header("Overall split")
-    supply_block_weight = st.slider("Supply Readiness weight (%)", 0, 100, 70)
+    if "split_supply" not in st.session_state:
+        st.session_state["split_supply"] = saved["supply_block"]
+    supply_block_weight = st.slider("Supply Readiness weight (%)", 0, 100, key="split_supply")
     demand_block_weight = 100 - supply_block_weight
     st.caption(f"Demand Opportunity weight: **{demand_block_weight}%**")
 
-if exclude_proxy_categories:
-    supply_weights = scoring.exclude_proxies(supply_weights)
+    st.header("Tier cut-offs")
+    st.caption("Minimum HPM Index for each tier. Below Silver is Bronze.")
+    for name in ("Platinum", "Gold", "Silver"):
+        if f"tier_{name}" not in st.session_state:
+            st.session_state[f"tier_{name}"] = int(saved["tiers"][name])
+    st.slider("Platinum ≥", 0, 100, key="tier_Platinum")
+    st.slider("Gold ≥", 0, 100, key="tier_Gold")
+    st.slider("Silver ≥", 0, 100, key="tier_Silver")
+    # Keep the bands ordered: Silver <= Gold <= Platinum.
+    plat = st.session_state["tier_Platinum"]
+    gold = min(st.session_state["tier_Gold"], plat)
+    silver = min(st.session_state["tier_Silver"], gold)
+    tier_thresholds = {"Platinum": int(plat), "Gold": int(gold), "Silver": int(silver)}
 
-result = scoring.compute_index(
-    category_scores,
-    supply_weights=supply_weights,
-    demand_weights=demand_weights,
-    supply_block_weight=supply_block_weight,
-    demand_block_weight=demand_block_weight,
-)
+settings = {"supply": supply_sliders, "demand": demand_sliders, "supply_block": supply_block_weight,
+            "exclude_proxies": exclude_proxy_categories, "tiers": tier_thresholds}
+weights.save_settings(**settings)
+is_custom = weights.get_settings() is not None
+result = weights.compute(category_scores, settings)
 
-col1, col2, col3 = st.columns(3)
+if is_custom:
+    st.info("Your custom weights are active on every page. Use **Reset to defaults** in the sidebar to undo.", icon="🎚️")
+
+col1, col2, col3, col4 = st.columns(4)
 col1.metric("Top 10 cutoff score", f"{result.nsmallest(10, 'rank')['hpm_index'].min():.1f}")
 col2.metric("Top 20 cutoff score", f"{result.nsmallest(20, 'rank')['hpm_index'].min():.1f}")
 col3.metric("Top 50 cutoff score", f"{result.nsmallest(50, 'rank')['hpm_index'].min():.1f}")
+col4.metric("Malls in Gold/Platinum", int(result["tier"].isin(["Gold", "Platinum"]).sum()))
 
-tab1, tab2, tab3 = st.tabs(["Top 10", "Top 20", "Top 50"])
-display_cols = ["rank", "name", "region", "operator", "hpm_index", "tier"]
+# Movement against the default ranking: positive = moved up.
+default_rank = default_index.set_index("mall_id")["rank"]
+moved = result["mall_id"].map(default_rank) - result["rank"]
+
+
+def _arrow(d) -> str:
+    if pd.isna(d) or d == 0:
+        return "–"
+    return f"▲{int(d)}" if d > 0 else f"▼{int(-d)}"
+
+
+result = result.assign(vs_default=moved.map(_arrow))
+display_cols = ["rank", "name", "region", "operator", "hpm_index", "tier", "vs_default"]
 rename = {"rank": "Rank", "name": "Mall", "region": "Region", "operator": "Operator",
-          "hpm_index": "Score", "tier": "Tier"}
+          "hpm_index": "Score", "tier": "Tier", "vs_default": "vs default rank"}
 
+tab1, tab2, tab3, tab4 = st.tabs(["Top 10", "Top 20", "Top 50", "How stable is this?"])
 for tab, n in zip((tab1, tab2, tab3), (10, 20, 50)):
     with tab:
         shortlist = result.nsmallest(n, "rank")[display_cols].rename(columns=rename)
@@ -130,3 +151,39 @@ for tab, n in zip((tab1, tab2, tab3), (10, 20, 50)):
             use_container_width=True,
             height=min(38 * (n + 1), 700),
         )
+        st.download_button(
+            f"Download Top {n} (CSV)", shortlist.to_csv(index=False).encode("utf-8"),
+            file_name=f"hpm_top{n}.csv", mime="text/csv", key=f"dl_top{n}",
+        )
+
+with tab4:
+    supply_w, demand_w = weights.effective_weights(settings)
+    stability = scoring.rank_stability(
+        category_scores, supply_weights=supply_w, demand_weights=demand_w,
+        supply_block_weight=supply_block_weight,
+    )
+    st.caption(
+        "500 random nudges to your current weights (each sub-weight varies, and the Supply share moves up to "
+        "±10 points). A mall that stays in the Top 10 in nearly every nudge is a safe pick; one that drops in and "
+        "out is a close call that your exact slider settings are deciding."
+    )
+    top = stability.head(20)
+    fig = px.scatter(
+        top, x="median_rank", y="name", error_x=top["rank_p95"] - top["median_rank"],
+        error_x_minus=top["median_rank"] - top["rank_p5"],
+        labels={"median_rank": "Rank (median, with 5th–95th percentile range)", "name": ""},
+    )
+    fig.update_yaxes(autorange="reversed")
+    fig.update_layout(height=520, margin=dict(l=0, r=0, t=10, b=0))
+    st.plotly_chart(fig, use_container_width=True)
+    solid = int((stability.head(10)["pct_top10"] >= 80).sum())
+    st.markdown(f"**{solid} of your Top 10** stay in the Top 10 in at least 80% of the nudges.")
+    st.dataframe(
+        top[["default_rank", "name", "median_rank", "rank_p5", "rank_p95", "pct_top10", "pct_top20", "pct_top50"]]
+        .rename(columns={"default_rank": "Current rank", "name": "Mall", "median_rank": "Median rank",
+                         "rank_p5": "Best (p5)", "rank_p95": "Worst (p95)", "pct_top10": "% in Top 10",
+                         "pct_top20": "% in Top 20", "pct_top50": "% in Top 50"})
+        .style.format({"Median rank": "{:.0f}", "Best (p5)": "{:.0f}", "Worst (p95)": "{:.0f}",
+                       "% in Top 10": "{:.0f}", "% in Top 20": "{:.0f}", "% in Top 50": "{:.0f}"}),
+        hide_index=True, use_container_width=True,
+    )

@@ -334,19 +334,26 @@ st.divider()
 st.header("5. Tiers, quadrants and what this score doesn't capture")
 
 st.subheader("How tiers and quadrants are assigned")
+t = scoring.TIER_THRESHOLDS
 st.markdown(
-    """
-Both are **relative** labels, not pass/fail thresholds:
+    f"""
+Both are labels within this list of malls, not pass/fail certifications:
 
-- **Tier** — malls are sorted by HPM Index and split into four groups of roughly equal size:
-  the top quarter are **Platinum**, then **Gold**, **Silver**, and the bottom quarter
-  **Bronze**. A Platinum mall is simply in the top ~25% of this list, not "certified ready".
+- **Tier** — fixed cut-offs on the HPM Index: **Platinum** ≥ {t['Platinum']:.0f}, **Gold** ≥ {t['Gold']:.0f},
+  **Silver** ≥ {t['Silver']:.0f}, otherwise **Bronze**. Because the cut-offs are fixed (earlier versions
+  split the list into four equal quarters), the number of malls in each tier changes when the weights or the
+  mall list change. The index is itself relative — every category is scaled against the best malls in this
+  list — so a Platinum mall is "high within this list", not "certified ready". The cut-offs are a judgement
+  call; move them on the What-If Simulator.
 - **Strategic Matrix quadrant** — a mall is "high" on Supply (or Demand) if its Supply
-  (or Demand) score is at or above the **median** of all malls. High Supply + High Demand =
-  *Pioneer HPM*; High Supply + Low Demand = *Quick Wins*; Low Supply + High Demand =
-  *Strategic Investment*; Low + Low = *Future Monitoring*. Because the split is at the
-  median, about half of all malls are always "high" on each axis, however low the scores are.
+  (or Demand) score is at or above the cut-off, which by default is the **median** of all malls.
+  High Supply + High Demand = *Pioneer HPM*; High Supply + Low Demand = *Quick Wins*;
+  Low Supply + High Demand = *Strategic Investment*; Low + Low = *Future Monitoring*. A median split
+  always puts about half of all malls on each side however low the scores are, so the Strategic Matrix
+  page can switch to fixed cut-offs instead.
 - Top 10 / 20 / 50 shortlists are simply the best-ranked 10 / 20 / 50 malls.
+- Your weights and cut-offs from the What-If Simulator carry over to the other pages. This page always
+  explains the *default* scoring.
 """
 )
 
@@ -525,6 +532,20 @@ st.caption(
     "A category's weight only matters in proportion to how much malls differ on it. Where the effective share "
     "is well below the nominal weight (typically a category most malls score 0 on, such as Partnership "
     "Readiness), moving its slider changes the ranking less than the label suggests."
+)
+
+st.subheader("Do the categories overlap?")
+corr_cols = list(scoring.CATEGORY_LABELS)
+corr = category_scores[corr_cols].rank().corr().round(2)
+corr.index = corr.columns = [scoring.CATEGORY_LABELS[c] for c in corr_cols]
+heat = px.imshow(corr, zmin=-1, zmax=1, color_continuous_scale="RdBu_r", text_auto=True, aspect="auto")
+heat.update_layout(height=520, margin=dict(l=0, r=0, t=10, b=0))
+st.plotly_chart(heat, use_container_width=True)
+st.caption(
+    "Rank correlation between categories (1 = move together, 0 = unrelated, −1 = opposite). Two categories "
+    "that move together are partly measuring the same thing, so weighting both counts it twice. Engagement Gap "
+    "is built to be unrelated to Reach & Population. The supply categories are only modestly related to one "
+    "another (dining and healthcare the most), so each adds mostly separate information."
 )
 
 if "A_healthier_share" in category_scores.columns:

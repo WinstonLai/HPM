@@ -1,4 +1,4 @@
-"""Page 7 - Regional Priorities: where should HPB expand next, how do chain
+"""Page 8 - Regional Priorities: where should HPB expand next, how do chain
 and independent landlords compare, and does the index recognise the malls that
 are already Health Promoting Malls? (Charter objectives: "identify regions that
 should be prioritised for HPM expansion", "differences across mall chains and
@@ -15,19 +15,22 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 import data_loader  # noqa: E402
 import scoring  # noqa: E402
+import weights  # noqa: E402
 
 st.set_page_config(page_title="Regional Priorities | HPM Dashboard", page_icon="📍", layout="wide")
 st.title("📍 Regional Priorities")
 st.caption(
     "Where the high-demand malls are, which of them HPB has not yet reached, and how landlord "
-    "portfolios compare. Uses the default weights; quadrants split Readiness and Demand at their medians."
+    "portfolios compare. Uses your current weights (default unless changed on the What-If Simulator); quadrants split Readiness and Demand at their medians."
 )
 
 if not data_loader.data_available():
     st.error("No processed data found. Run `python etl/run_all.py` first.")
     st.stop()
 
-df = scoring.add_strategic_quadrant(data_loader.load_default_index())
+df, is_custom = weights.load_index()
+weights.show_banner("regional")
+df = scoring.add_strategic_quadrant(df)
 has_hpm_list = "is_existing_hpm" in df.columns and int(df["is_existing_hpm"].sum()) > 0
 if "is_existing_hpm" not in df.columns:
     df["is_existing_hpm"] = 0
