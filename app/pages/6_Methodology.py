@@ -31,22 +31,40 @@ index_df = data_loader.load_default_index()
 
 supply_pct = round(scoring.SUPPLY_BLOCK_WEIGHT)
 demand_pct = round(scoring.DEMAND_BLOCK_WEIGHT)
+n_malls = len(index_df)
+n_known_operator = int((index_df["operator"] != "Unknown").sum())
 
 # --------------------------------------------------------------------------------
 st.header("1. The big picture")
 st.markdown(
     f"""
-Every mall gets **one score out of 100** — the **HPM Index** — built from two halves:
+Every mall gets **one score on a 0–100 scale** — the **HPM Index** — built from two halves:
 
 - **Supply Readiness ({supply_pct}% of the score)** — how much of the health-promoting stuff
-  (healthy dining, gyms, clinics, parks, community programmes, an engaged landlord)
+  (healthy dining, gyms, clinics, parks, community clubs, a partnership-ready landlord)
   already exists at or near the mall today.
 - **Demand Opportunity ({demand_pct}% of the score)** — how much *potential* there is around the
-  mall: nearby population, transport access, and how under-served the area currently is.
+  mall: nearby residents, transport access, and how few health-promoting amenities
+  the area has per resident ("untapped demand").
 
-A mall doesn't need to win on both. A small mall with almost no gyms or clinics nearby
-but a huge residential catchment can still score well — that's the point: the index is
-meant to surface **opportunity**, not just reward malls that are already the biggest.
+Supply carries more than twice the weight of Demand, so a large catchment can lift a mall
+but cannot rescue one that has almost nothing on the supply side. The Demand half is
+there to separate malls of similar readiness by **opportunity**, and the
+**Strategic Matrix** page shows high-demand / low-readiness malls separately so they
+aren't lost in the ranking.
+
+**Read the score as a relative ranking, not an absolute "% ready".** Each category is
+scaled against the best and worst mall in this list of {n_malls} (Section 3), so even the
+top mall is far from 100: the highest HPM Index here is **{index_df['hpm_index'].max():.1f}**
+and the average is **{index_df['hpm_index'].mean():.1f}**.
+
+**Where the mall list comes from.** The {n_malls} malls are a union of three Wikipedia
+sources (the *List of shopping malls in Singapore*, every article in *Category: Shopping
+malls in Singapore*, and the "Housing estate commercial areas" section of *List of commercial
+sites in Singapore*), de-duplicated and then geocoded with the OneMap Search API (the top
+search hit is used for each name). Candidates that OneMap couldn't geocode were dropped, so
+the list is **not guaranteed to be exhaustive**. Each mall's region is the URA region of its
+nearest Master Plan subzone centroid.
 """
 )
 
@@ -65,38 +83,57 @@ st.header("2. What each category actually measures")
 
 CATEGORY_INFO = [
     ("A_dining_score", "Supply", "🍽️", "Healthy Dining",
-     "Healthier Dining Programme outlets, HPB dining partners, and licensed supermarkets "
-     "found at or within ~200m of the mall.",
+     "A count of three things: (1) HPB Healthier Dining Programme eateries within ~200m of the "
+     "mall (or sharing its building name); (2) HPB Healthier Dining Partner outlets whose "
+     "listed address contains the mall's name — leaving out any outlet already counted in (1) "
+     "(matched on postal code + brand) and repeated rows; (3) NEA-licensed supermarkets whose "
+     "listed address contains the mall's name. Any licensed supermarket counts — the data can't "
+     "tell us which ones stock healthier-choice ranges.",
      "HPB: Healthier Eateries, Healthier Dining Partners · NEA: Supermarket Licences"),
     ("B_fitness_score", "Supply", "🏋️", "Physical Activity",
-     "Gyms and sport facilities at or within ~200m of the mall.",
+     "Gyms@SG gyms plus SportSG sport centres/stadiums/swimming complexes within ~200m "
+     "of the mall. Fitness studios and activity-oriented tenants (e.g. sports retailers) "
+     "are not in any public dataset and aren't counted.",
      "HPB: Gyms@SG · SportSG: Sport Facilities"),
     ("C_engagement_score", "Supply", "🤝", "H365 & HPB Engagement",
-     "Community Club / PAssion WaVe outlets within ~500m — used as a proxy since "
-     "no public dataset of actual H365 event locations exists (see Limitations below).",
+     "A proxy: the number of People's Association Community Clubs / PAssion WaVe outlets "
+     "within ~500m. No public dataset of actual H365 event locations exists (see Section 5).",
      "People's Association: Community Clubs"),
     ("D_healthcare_score", "Supply", "💊", "Healthcare",
-     "CHAS clinics and licensed pharmacies at or within ~200m of the mall.",
+     "A count of MOH-listed CHAS clinics within ~200m of the mall (or sharing its building "
+     "name), plus HSA-licensed pharmacies whose listed address contains the mall's name.",
      "MOH: CHAS Clinics · HSA: Licensed Pharmacies"),
     ("E_infra_score", "Supply", "🌳", "Healthy Infrastructure",
-     "Parks and park facilities (playgrounds, fitness corners, green spaces) within ~500m, "
-     "plus bicycle parking racks at or within ~200m of the mall.",
+     "A count of HPB Parks@SG parks, plus NParks **playgrounds and fitness areas only**, within "
+     "~500m, plus bicycle-rack locations within ~200m. (NParks' file also lists carparks, "
+     "noticeboards, toilets, etc.; those are excluded.) Water refill points, quiet corners and "
+     "walkability — also in the charter — have no usable data and aren't counted.",
      "HPB: Parks@SG · NParks: Park Facilities · LTA: Bicycle Rack"),
     ("F_partnership_score", "Supply", "🏢", "Partnership Readiness",
-     "A proxy: the size of the mall operator's portfolio (bigger chains are more likely "
-     "to have centralised CSR/health-programme capacity), plus a bonus for the one "
-     "HPM partnership HPB's own website confirms (Downtown East).",
-     "Wikipedia mall-operator scrape · hpb.gov.sg"),
+     "A proxy, not a record of partnerships: the number of malls in this list that share the "
+     "mall's operator name (scaled 0–100, then × 0.8), plus a flat +20 for Downtown East, "
+     "the one HPM partnership named on HPB's website. Malls with an unknown operator get 0 "
+     "from the first part (see Section 5).",
+     "Wikipedia infobox (owner/developer/management) · hpb.gov.sg"),
     ("reach_population_score", "Demand", "👨‍👩‍👧", "Reach & Population",
-     "Resident population (and separately, senior population) within ~1.2km of the mall.",
-     "SingStat: Census 2020 population by subzone · URA: subzone boundaries"),
+     "70% total + 30% senior (65+) *resident* population (Census 2020) of the URA subzones "
+     "whose centroid lies within ~1.2km of the mall. Each of the two measures is scaled "
+     "0–100 separately, then combined 70/30. Whole-subzone totals are used — they are not "
+     "pro-rated by area.",
+     "SingStat: Census 2020 resident population by subzone · URA: subzone boundaries"),
     ("accessibility_score", "Demand", "🚌", "Accessibility",
-     "MRT exits within ~1.2km and bus stops within ~400m.",
+     "50% MRT station exits within ~1.2km + 50% bus stops within ~400m. Each count is scaled "
+     "0–100 separately, then averaged.",
      "LTA: MRT Station Exits, Bus Stops"),
     ("engagement_gap_score", "Demand", "📊", "Engagement Gap",
-     "The inverse of the H365 & HPB Engagement score — a mall with high catchment "
-     "potential but low existing engagement represents the biggest untapped opportunity.",
-     "Derived: 100 − H365 & HPB Engagement score"),
+     "The charter's \"untapped demand\" (low healthy-dining exposure, under-served locations), "
+     "measured as how **few** health-promoting amenities there are per resident: healthier "
+     "eateries, gyms/sport facilities and CHAS clinics within ~1.2km, per 10,000 residents in "
+     "that catchment. Malls are ranked on this ratio — the fewest per resident scores 100, the "
+     "most scores 0 (rank-based because the ratio is extremely skewed). A mall with no "
+     "residents in its catchment scores 0. Community Clubs are deliberately not part of it, "
+     "so it no longer mirrors the H365 & HPB Engagement score.",
+     "HPB: Healthier Eateries, Gyms@SG · SportSG · MOH: CHAS Clinics · SingStat: Census 2020"),
 ]
 
 supply_tab, demand_tab = st.tabs(["Supply Readiness categories", "Demand Opportunity factors"])
@@ -115,21 +152,26 @@ for tab, group in ((supply_tab, "Supply"), (demand_tab, "Demand")):
                 c2.metric("Default weight", f"{weight:.0f}%")
 
 st.caption(
-    "These default weights come from the charter's own illustrative weights. They aren't "
-    "fixed — try changing them yourself on the **What-If Simulator** page and watch every "
-    "ranking update instantly."
+    "Weights shown are each factor's share **within its own block** (they sum to 100% per tab). "
+    "Supply weights start from the charter's illustrative weights (Dining 25, Fitness 20, "
+    "H365 15, Healthcare 10, Infrastructure 10, Partnership 10 — which sum to 90, because the "
+    "charter's seventh category, Demand Potential, was 10) and are re-scaled to sum to 100 "
+    "inside the Supply block, which is why Dining shows 28% rather than 25%. The charter does "
+    "not specify weights inside Demand, so its three factors are weighted equally. None of "
+    "this is fixed — change any of it on the **What-If Simulator** page."
 )
 
 st.divider()
 
 # --------------------------------------------------------------------------------
-st.header("3. Why we don't just count amenities")
+st.header("3. Raw counts vs. normalised scores")
 st.markdown(
     """
 A bigger mall will almost always have more of everything — more dining options, more
 clinics, more parks nearby — simply because it's bigger, not because it's more
 health-promoting. Counting raw numbers would always favour big malls over small,
-highly-focused ones. The project charter's own example makes the point:
+highly-focused ones. The project charter's own example makes the point, and its intended
+design is to score each category as a **share** of a mall's tenants:
 """
 )
 
@@ -157,27 +199,40 @@ with example_col2:
     st.caption("But as a *share* of what's on offer, Mall B is actually twice as health-focused.")
 
 st.markdown(
-    """
-**Our approach:** we don't have a public directory of every mall's *total* tenant count
-(the figure the charter's example divides by), so instead each raw count is
-**min-max scaled to 0–100 across all 185 malls**:
+    f"""
+**What we actually do:** we don't have a public directory of every mall's *total* tenant
+count (the figure the charter's example divides by), so we **cannot** compute the charter's
+"% of outlets" metric. Instead each category's raw amenity count is **min-max scaled to
+0–100 across all {n_malls} malls**:
 
-> `score = (mall's count − lowest count in Singapore) / (highest count in Singapore − lowest count) × 100`
+> `score = (mall's count − lowest count in the list) / (highest count in the list − lowest count) × 100`
 
-A mall with the fewest amenities in its category scores 0; the mall with the most scores
-100; everyone else falls proportionally in between. This doesn't reproduce the charter's
-exact tenant-percentage formula, but it fixes the same underlying problem — a big mall's
-raw count no longer automatically wins.
+The mall with the fewest in a category scores 0, the mall with the most scores 100, and
+everyone else falls proportionally in between.
+
+**What this does and doesn't fix.** Min-max scaling puts nine very different measures
+(outlet counts, residents, bus stops…) onto one comparable 0–100 scale so they can be
+weighted and added. It is a *linear* rescale of the raw count, so **within a category the
+mall ranking is identical to the raw-count ranking — it does not remove the "bigger malls
+have more of everything" bias** that the charter warns about. Two further effects follow:
+
+- A single outlier compresses everyone else (e.g. the Healthy Infrastructure count has a median
+  of {int(category_scores['E_infra_count'].median())} but a maximum of
+  {int(category_scores['E_infra_count'].max())}, so the typical mall scores only
+  {category_scores['E_infra_score'].median():.0f}/100 on it).
+- The Engagement Gap factor is the one exception: it is scaled by rank, not min-max
+  (see Section 2).
+- Scores are relative to this list — adding or removing malls changes every score.
 """
 )
 
-with st.expander("See this normalisation on real data — Healthy Dining"):
+with st.expander("See this scaling on real data — Healthy Dining"):
     lo, hi = category_scores["A_dining_count"].min(), category_scores["A_dining_count"].max()
+    example_count = int(round((lo + hi) / 2))
     st.markdown(
-        f"Across all {len(category_scores)} malls, the Healthy Dining outlet count ranges "
-        f"from **{lo}** to **{hi}**. So a mall with **{int((lo+hi)/2)}** outlets would score "
-        f"roughly **{(( (lo+hi)/2 - lo) / (hi - lo) * 100):.0f}/100** on this category — "
-        f"regardless of whether it's a huge or tiny mall."
+        f"Across all {len(category_scores)} malls, the Healthy Dining count ranges "
+        f"from **{lo}** to **{hi}**. So a mall with **{example_count}** would score "
+        f"**{(example_count - lo) / (hi - lo) * 100:.0f}/100** on this category."
     )
 
 st.divider()
@@ -198,7 +253,7 @@ for col, w in scoring.DEFAULT_SUPPLY_WEIGHTS.items():
     supply_rows.append({
         "Category": scoring.CATEGORY_LABELS[col],
         "Score (0-100)": round(row[col], 1),
-        "Weight": f"{w / supply_total_weight * 100:.1f}%",
+        "Weight (within block)": f"{w / supply_total_weight * 100:.1f}%",
         "Contribution": round(row[col] * w / supply_total_weight, 2),
     })
 supply_table = pd.DataFrame(supply_rows)
@@ -209,7 +264,7 @@ for col, w in scoring.DEFAULT_DEMAND_WEIGHTS.items():
     demand_rows.append({
         "Category": scoring.CATEGORY_LABELS[col],
         "Score (0-100)": round(row[col], 1),
-        "Weight": f"{w / demand_total_weight * 100:.1f}%",
+        "Weight (within block)": f"{w / demand_total_weight * 100:.1f}%",
         "Contribution": round(row[col] * w / demand_total_weight, 2),
     })
 demand_table = pd.DataFrame(demand_rows)
@@ -227,9 +282,9 @@ with wcol2:
 st.markdown(f"**Step C — Combine them ({supply_pct}% Supply + {demand_pct}% Demand)**")
 st.latex(
     r"\text{HPM Index} = " + f"{row['supply_score']:.1f}"
-    + rf"\times {scoring.SUPPLY_BLOCK_WEIGHT:.2f} + "
+    + rf"\times {scoring.SUPPLY_BLOCK_WEIGHT / 100:.2f} + "
     + f"{row['demand_score']:.1f}"
-    + rf"\times {scoring.DEMAND_BLOCK_WEIGHT:.2f} = " + f"{row['hpm_index']:.1f}"
+    + rf"\times {scoring.DEMAND_BLOCK_WEIGHT / 100:.2f} = " + f"{row['hpm_index']:.1f}"
 )
 st.success(
     f"**{mall_name}**'s HPM Index is **{row['hpm_index']:.1f} / 100** — "
@@ -256,33 +311,108 @@ st.caption(
 st.divider()
 
 # --------------------------------------------------------------------------------
-st.header("5. What this score doesn't capture")
+st.header("5. Tiers, quadrants and what this score doesn't capture")
+
+st.subheader("How tiers and quadrants are assigned")
 st.markdown(
     """
-Being transparent about the gaps matters as much as explaining what works. Two categories
-are **proxies**, not the literal metric named in the charter, because no public dataset
-for the real thing exists yet:
+Both are **relative** labels, not pass/fail thresholds:
 
-- **H365 & HPB Engagement** — there's no public dataset of actual H365 event locations or
-  attendance, so we use nearby Community Club density as a stand-in for "community
-  activation" in the area.
-- **Partnership Readiness** — there's no public record of which malls have an existing HPB
-  partnership (HPB's own website names only one: Downtown East), so we use the mall
-  operator's portfolio size as a rough proxy for how likely they are to have the capacity
-  to partner.
+- **Tier** — malls are sorted by HPM Index and split into four groups of roughly equal size:
+  the top quarter are **Platinum**, then **Gold**, **Silver**, and the bottom quarter
+  **Bronze**. A Platinum mall is simply in the top ~25% of this list, not "certified ready".
+- **Strategic Matrix quadrant** — a mall is "high" on Supply (or Demand) if its Supply
+  (or Demand) score is at or above the **median** of all malls. High Supply + High Demand =
+  *Pioneer HPM*; High Supply + Low Demand = *Quick Wins*; Low Supply + High Demand =
+  *Strategic Investment*; Low + Low = *Future Monitoring*. Because the split is at the
+  median, about half of all malls are always "high" on each axis, however low the scores are.
+- Top 10 / 20 / 50 shortlists are simply the best-ranked 10 / 20 / 50 malls.
+"""
+)
 
-A few other simplifications:
+gap_vs_reach_corr = category_scores["engagement_gap_score"].corr(category_scores["reach_population_score"])
 
+st.subheader("Proxies instead of the charter's real metrics")
+st.markdown(
+    f"""
+Two categories are **proxies**, not the metric named in the charter, because no public
+dataset for the real thing exists:
+
+- **H365 & HPB Engagement** — there's no public dataset of H365 event locations or attendance,
+  so we count nearby Community Clubs / PAssion WaVe outlets (no mall here has more than
+  {int(category_scores['C_engagement_count'].max())} within 500m, so in practice it is a coarse 0 / 50 / 100 score). It measures *proximity to a CC*, not
+  health-programme activity.
+- **Partnership Readiness** — there's no public record of which malls have an HPB
+  partnership (HPB's website names only Downtown East), so we use the number of malls in
+  *this list* that share the mall's operator name. **An operator could be found on
+  Wikipedia for only {n_known_operator} of {n_malls} malls**; the rest are "Unknown" and score 0,
+  so this category is effectively 0 for {(category_scores['F_partnership_score'] == 0).sum()} of
+  {n_malls} malls and does very little to separate them.
+
+**Engagement Gap overlaps with Reach & Population.** Engagement Gap (amenities per
+resident) is independent of the Community Club count, but it is partly driven by the same
+population figure as Reach & Population: the two are correlated
+(**{gap_vs_reach_corr:.2f}**), because a bigger catchment spreads the same amenities across
+more people. Population therefore carries somewhat more influence in the Demand block than
+its one-third weight suggests. You can change this on the What-If Simulator.
+"""
+)
+
+st.subheader("Data coverage: how many malls score zero")
+raw_cols = {
+    "Healthy Dining": "A_dining_count",
+    "Physical Activity": "B_fitness_count",
+    "H365 & HPB Engagement": "C_engagement_count",
+    "Healthcare": "D_healthcare_count",
+    "Healthy Infrastructure": "E_infra_count",
+    "Population catchment": "pop_catchment",
+    "MRT exits": "mrt_count",
+}
+coverage = [
+    {"Category": label, "Malls with a count of 0": int((category_scores[col] == 0).sum()),
+     "% of malls": f"{(category_scores[col] == 0).mean() * 100:.0f}%"}
+    for label, col in raw_cols.items()
+]
+coverage.append({
+    "Category": "Partnership Readiness",
+    "Malls with a count of 0": int((category_scores["F_partnership_score"] == 0).sum()),
+    "% of malls": f"{(category_scores['F_partnership_score'] == 0).mean() * 100:.0f}%",
+})
+st.dataframe(pd.DataFrame(coverage), hide_index=True, use_container_width=True)
+st.caption(
+    "A zero means no matching record was found — either the mall genuinely has none, or the "
+    "match failed (see below). Missing data is treated as zero, never skipped."
+)
+
+st.subheader("Other simplifications to keep in mind")
+st.markdown(
+    """
 - **Healthy Dining is a density score, not a true "% of F&B outlets" figure** — that needs
-  a full per-mall tenant directory, which isn't publicly available.
+  a full per-mall tenant directory, which isn't publicly available. The Healthier Eateries and
+  Healthier Dining Partners datasets describe many of the same outlets; we remove partner
+  outlets that match an eatery on postal code + brand, but a duplicate with a differently
+  spelled brand or no postal code in its address can still be counted twice.
 - **Supermarket presence counts any licensed supermarket**, not specifically ones "with
-  healthier choice options" as the charter names it — no public dataset flags which
-  supermarkets carry HPB's healthier-choice range at the outlet level.
-- **Population catchment uses an approximate centroid** for each URA subzone (not the exact
-  boundary), so it can occasionally under- or over-count a mall sitting right at a
-  subzone's edge.
-- **Mall operator names are free text** scraped from Wikipedia infoboxes, so near-identical
-  entities (e.g. two slightly different names for the same landlord) aren't always merged.
+  healthier choice options" as the charter names it.
+- **Catchments are straight-line circles, not mall footprints.** Counts within 200m / 500m
+  (and 1.2km / 400m for demand) include amenities that belong to neighbouring buildings, so
+  malls in dense clusters (e.g. Orchard) share and double-count the same amenities.
+- **Address-text matching depends on naming.** Healthier Dining Partners, pharmacies and
+  supermarkets have no coordinates; they only count if the mall's name appears in the
+  outlet's address (matched as a whole phrase). Outlets listed by street address alone are
+  missed, so those categories are more likely to under-count.
+- **Population is residents only, from Census 2020.** Worker, visitor and non-resident
+  populations (which the charter lists) are not included. Subzones are placed by an
+  approximate centroid (a simple average of boundary points, not the exact boundary), and a
+  subzone's whole population is counted if its centroid is within 1.2km, otherwise none of
+  it is — so a mall at the edge of a large subzone can be under- or over-counted.
+- **Several charter measures aren't scored at all** because no public data exists:
+  fitness studios and activity-oriented tenants, water refill points, quiet corners,
+  walkability, Healthier SG providers, event history, and landlord willingness.
+- **Geocoding is automatic.** Each mall's location is the top OneMap search result for its
+  name and isn't manually checked, so a mislocated mall would pick up the wrong amenities.
+- **Mall operator names are free text** from Wikipedia infoboxes, so near-identical entities
+  (e.g. two slightly different names for the same landlord) aren't always merged.
 
 Full source citations and dataset IDs are in the project's `README.md`.
 """

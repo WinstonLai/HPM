@@ -82,11 +82,15 @@ Exact dataset IDs are in `etl/build_amenities.py`.
   tolerant of naming variants like "ABC Mall" vs "ABC Shopping Centre").
 - **Normalisation**: every raw count is min-max scaled to 0–100 across the
   mall population, so a mall's score reflects its *relative* standing, not
-  its raw size. This is a simplification of the charter's own worked example
-  (which divides by each mall's *total* tenant count, e.g. "% of F&B outlets
-  in HDP") — that formula needs a full per-mall tenant directory, which is
-  not publicly available. Min-max scaling still fixes the core bias the
-  charter warns about (a big mall's raw count no longer mechanically wins).
+  its raw size. This is **not** the charter's own worked example (which
+  divides by each mall's *total* tenant count, e.g. "% of F&B outlets in
+  HDP") — that formula needs a full per-mall tenant directory, which is not
+  publicly available. Min-max scaling is a linear rescale of the raw count:
+  it puts categories on a common 0–100 scale so they can be weighted and
+  summed, but within a category the ranking is the same as the raw-count
+  ranking, so it does **not** remove the size bias the charter warns about.
+  It is also sensitive to outliers (one mall with a very high count
+  compresses everyone else's score).
 - **Region assignment**: every mall's `region` is the URA region of its
   *nearest* Master Plan subzone centroid (Central/East/North/North-East/
   West), computed after geocoding — not the region label from whichever
@@ -121,13 +125,44 @@ Exact dataset IDs are in `etl/build_amenities.py`.
   flags which specific supermarkets carry HPB's "healthier choice" range —
   so this counts any licensed supermarket, not specifically ones "with
   healthier choice options" as the charter's measure names it.
-- **Population catchment**: subzone population is apportioned to a mall if
-  the subzone's polygon *centroid* (a simple vertex-average, not
-  area-weighted) falls within 1.2km — an approximation that can miss a
-  mall sitting at the edge of a large subzone.
-- **Engagement Gap**: computed as `100 - Category C score`, per the
-  charter's own definition of "untapped demand" as low existing engagement
-  despite catchment potential.
+- **Population catchment**: a subzone's *whole* resident population (Census
+  2020) is counted for a mall if the subzone's polygon *centroid* (a simple
+  vertex-average, not area-weighted) falls within 1.2km, and none of it
+  otherwise — an approximation that can miss or over-count a mall sitting at
+  the edge of a large subzone. Reach & Population = 70% total + 30% senior
+  (65+) population, each min-max scaled; Accessibility = 50% MRT exits
+  (1.2km) + 50% bus stops (400m), each min-max scaled. Worker/visitor
+  populations are not included.
+- **Category E (Healthy Infrastructure)**: NParks' Park Facilities dataset
+  lists every piece of park infrastructure (mostly carparks, noticeboards,
+  access points and map boards). Only `PLAYGROUND` and `FITNESS AREA` rows
+  are counted (`PARK_FACILITY_CLASSES` in `build_category_scores.py`);
+  Parks@SG parks and LTA bicycle racks are unchanged.
+- **Category A overlap**: the Healthier Eateries and Healthier Dining
+  Partners datasets describe many of the same outlets. Partner outlets are
+  dropped when an eatery with the same postal code + brand exists, and
+  verbatim-repeated partner rows are collapsed. Outlets with no parseable
+  postal code or a differently spelled brand can still be double-counted.
+- **Category F coverage**: an operator was found for only a small minority of
+  malls (24 of 185 at the time of writing); the rest are "Unknown", score 0,
+  so Category F barely differentiates malls.
+- **Tiers and quadrants** are relative: tiers are quartiles of the rank
+  (top quarter = Platinum … bottom quarter = Bronze); quadrants split Supply
+  and Demand at their medians.
+- **Engagement Gap** ("untapped demand"): health-promoting amenities
+  (healthier eateries, gyms/sport facilities, CHAS clinics) within 1.2km per
+  10,000 residents of the same catchment, inverted — fewest per resident =
+  100. Scaled by rank rather than min-max because the ratio is extremely
+  heavy-tailed; a mall with no residents in its catchment scores 0.
+  Community Clubs are deliberately excluded so the factor doesn't simply
+  mirror Category C (an earlier version defined it as `100 - Category C`,
+  which cancelled C's own Supply contribution almost exactly). It is
+  positively correlated (~0.8) with Reach & Population, since the same
+  population figure is the denominator.
+- **Default weights**: the charter's illustrative Supply weights
+  (25/20/15/10/10/10, summing to 90 because Demand Potential was 10) are
+  re-scaled to sum to 100 within the Supply block; the Demand block's three
+  factors are weighted equally (the charter doesn't specify them).
 
 ## Repository layout
 
@@ -144,7 +179,7 @@ etl/                ETL pipeline (run_all.py orchestrates everything)
 app/                 Streamlit dashboard
   Home.py            Page 1 - Executive Summary
   lib/                shared data loading + scoring helpers
-  pages/              Pages 2-6
+  pages/              Pages 2-7
 data/
   raw/               cached raw downloads (gitignored)
   processed/         malls.csv, category_scores.csv, hpm_index.csv (committed)
