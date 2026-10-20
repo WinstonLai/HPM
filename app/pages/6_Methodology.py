@@ -52,11 +52,11 @@ meant to surface **opportunity**, not just reward malls that are already the big
 
 col1, col2, col3 = st.columns([2, 1, 2])
 with col1:
-    st.markdown("#### Supply Readiness\n*(6 categories, weighted)*")
+    st.markdown(f"#### Supply Readiness ×{supply_pct}%\n*(6 categories, weighted)*")
 with col2:
-    st.markdown(f"<h2 style='text-align:center'>×{supply_pct}% +</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align:center'>+</h2>", unsafe_allow_html=True)
 with col3:
-    st.markdown("#### Demand Opportunity\n*(3 factors, weighted)*")
+    st.markdown(f"#### Demand Opportunity ×{demand_pct}%\n*(3 factors, weighted)*")
 
 st.divider()
 
