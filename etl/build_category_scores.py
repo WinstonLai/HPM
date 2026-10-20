@@ -19,9 +19,10 @@ Every raw count is then min-max normalised to 0-100 across the mall
 population. This is documented as a simplification: the charter's own
 worked example normalises by dividing by each mall's *total* tenant count
 (e.g. "% of F&B outlets in HDP"), which requires a full per-mall tenant
-directory that is not publicly available. Min-max scaling still fixes the
-core bias the charter is warning about (a big mall's raw count no longer
-mechanically wins), just not via the exact same formula.
+directory that is not publicly available. Min-max scaling is only a linear
+rescale of the raw count: it makes categories comparable so they can be
+weighted and summed, but it does NOT remove the size bias the charter is
+warning about (within a category the ranking equals the raw-count ranking).
 """
 from __future__ import annotations
 
@@ -43,6 +44,13 @@ ON_SITE_RADIUS_M = 200
 NEARBY_RADIUS_M = 500
 CATCHMENT_RADIUS_M = 1200
 BUS_RADIUS_M = 400
+
+# NParks' Park Facilities file lists every piece of park furniture (mostly
+# carparks, noticeboards, access points, toilets, ...). Only these classes
+# count towards Healthy Infrastructure (charter: children's playgrounds,
+# fitness corners).
+PARK_FACILITY_CLASSES = {"PLAYGROUND", "FITNESS AREA"}
+
 
 MALL_SUFFIX_RE = re.compile(
     r"\b(shopping (mall|centre|center)|mall|centre|center|plaza|building|mrt|singapore)\b",
@@ -110,6 +118,48 @@ def load_csv_addresses(filename: str, address_cols: str | list[str]) -> pd.Serie
     if isinstance(address_cols, str):
         return df[address_cols]
     return df[address_cols].fillna("").astype(str).agg(" ".join, axis=1)
+
+
+POSTAL_RE = re.compile(r"(?<!\d)(\d{6})(?!\d)")
+
+
+def _brand_key(name) -> str:
+    return NON_ALNUM_RE.sub("", str(name).lower())
+
+
+def load_deduped_partner_addresses(eateries: pd.DataFrame) -> pd.Series:
+    """Addresses of Healthier Dining Partners outlets, minus outlets already
+    counted as Healthier Eateries.
+
+    The two HPB datasets describe largely the same outlets (500+ shared
+    postal codes), so summing them double-counts. An outlet is treated as the
+    same one when postal code and brand match (eatery NAME is "<Brand> -
+    <location>"; partners have a Brand_Name column). The partners file also
+    repeats some rows verbatim (e.g. one brand spelled "Wingstop" and
+    "WINGSTOP" at the same address), which are collapsed too. Outlets whose
+    address has no parseable postal code can't be cross-matched against the
+    eateries and are kept."""
+    path = RAW_DIR / "healthier_dining_fnb_partners.csv"
+    if not path.exists():
+        print("  [warn] missing raw file healthier_dining_fnb_partners.csv, skipping this source")
+        return pd.Series(dtype=str)
+    partners = pd.read_csv(path)
+    partners["_pc"] = partners["Outlet_Address"].fillna("").str.extract(POSTAL_RE)[0]
+    partners["_brand"] = partners["Brand_Name"].map(_brand_key)
+
+    if "ADDRESSPOSTALCODE" in eateries.columns and "NAME" in eateries.columns:
+        eatery_pc = eateries["ADDRESSPOSTALCODE"].astype(str).str.extract(POSTAL_RE)[0]
+        eatery_brand = eateries["NAME"].astype(str).str.split(r"\s+-\s+").str[0].map(_brand_key)
+        eatery_keys = set(zip(eatery_pc, eatery_brand))
+        already_counted = [
+            (pc, b) in eatery_keys if isinstance(pc, str) else False
+            for pc, b in zip(partners["_pc"], partners["_brand"])
+        ]
+        partners = partners[~pd.Series(already_counted, index=partners.index)]
+
+    partners = partners.assign(_addr=partners["Outlet_Address"].fillna("").map(normalize_name_strict))
+    partners = partners.drop_duplicates(subset=["_addr", "_brand"])
+    return partners["Outlet_Address"]
 
 
 def load_points(filename: str) -> pd.DataFrame:
@@ -257,6 +307,29 @@ def compute_population_catchment(malls: pd.DataFrame, centroids: pd.DataFrame) -
     return total_catchment, senior_catchment
 
 
+def compute_untapped_demand(malls: pd.DataFrame, pop_catchment: np.ndarray,
+                            point_sets: list[pd.DataFrame]) -> tuple[np.ndarray, np.ndarray, pd.Series]:
+    """Engagement Gap ("untapped demand"): health-promoting amenities (healthier
+    eateries, gyms/sport facilities, CHAS clinics) within the 1.2km catchment
+    per 10,000 residents, inverted so FEWER amenities per resident = HIGHER
+    gap. The ratio is extremely heavy-tailed (tiny-population catchments give
+    huge values), which min-max scaling would let squash everyone else, so
+    this one factor is scaled by RANK instead: the mall with the lowest
+    density scores 100, the highest scores 0. A mall with no resident
+    population in its catchment gets a gap of 0 (nobody to serve). Community
+    clubs (Category C) are intentionally excluded -- see the call site."""
+    pts = pd.concat([p[["lat", "lon"]] for p in point_sets if not p.empty], ignore_index=True)
+    amenities = count_nearby(malls, pts, CATCHMENT_RADIUS_M)
+    pop = np.asarray(pop_catchment, dtype=float)
+    per_10k = np.where(pop > 0, amenities / np.where(pop > 0, pop, 1) * 10_000, np.nan)
+    density = pd.Series(per_10k)
+    n_ranked = int(density.notna().sum())
+    ranks = density.rank(method="average", ascending=True)  # NaN stays NaN
+    gap = (n_ranked - ranks) / max(n_ranked - 1, 1) * 100
+    gap = gap.fillna(0.0)
+    return amenities, per_10k, gap
+
+
 def compute_category_f(malls: pd.DataFrame) -> pd.Series:
     """Partnership Readiness proxy: portfolio scale of the mall's operator
     (a larger chain is more likely to have centralised CSR/health-programme
@@ -285,7 +358,7 @@ def build_category_scores() -> pd.DataFrame:
 
     print("Category A - Healthy Dining Ecosystem (incl. supermarkets) ...")
     dining = load_points("healthier_eateries.geojson")
-    dining_partners = load_csv_addresses("healthier_dining_fnb_partners.csv", "Outlet_Address")
+    dining_partners = load_deduped_partner_addresses(dining)
     # NEA's licence list has no single address field -- build one from its
     # separate building_name/block_house_num/street_name columns.
     supermarkets = load_csv_addresses(
@@ -322,10 +395,12 @@ def build_category_scores() -> pd.DataFrame:
     out["D_healthcare_score"] = min_max_normalize(out["D_healthcare_count"])
 
     print("Category E - Healthy Infrastructure (parks + bicycle racks) ...")
-    infra = pd.concat([
-        load_points("parks_at_sg.geojson"),
-        load_points("park_facilities.geojson"),
-    ], ignore_index=True)
+    park_facilities = load_points("park_facilities.geojson")
+    if "CLASS" in park_facilities.columns:
+        park_facilities = park_facilities[
+            park_facilities["CLASS"].astype(str).str.upper().str.strip().isin(PARK_FACILITY_CLASSES)
+        ]
+    infra = pd.concat([load_points("parks_at_sg.geojson"), park_facilities], ignore_index=True)
     bike_racks = load_points("bicycle_racks.geojson")
     out["E_bike_rack_count"] = count_nearby(malls, bike_racks, ON_SITE_RADIUS_M)
     out["E_infra_count"] = count_nearby(malls, infra, NEARBY_RADIUS_M) + out["E_bike_rack_count"]
@@ -351,10 +426,18 @@ def build_category_scores() -> pd.DataFrame:
         min_max_normalize(out["mrt_count"]) * 0.5 + min_max_normalize(out["bus_count"]) * 0.5
     )
 
-    # Engagement Gap: charter defines "untapped demand" as low existing H365/
-    # HPB engagement despite catchment potential -- proxied as the inverse of
-    # Category C's own score.
-    out["engagement_gap_score"] = 100 - out["C_engagement_score"]
+    # Engagement Gap ("untapped demand"): charter lists "low healthy dining
+    # exposure" and "under-served health promotion locations". Scored as how
+    # few health-promoting amenities the catchment has per resident -- this is
+    # deliberately independent of Category C (community clubs) so the demand
+    # block doesn't simply mirror/cancel a supply category.
+    area_amenities, per_10k, gap = compute_untapped_demand(
+        malls, total_pop,
+        [dining, fitness, healthcare],
+    )
+    out["area_health_amenities"] = area_amenities
+    out["area_amenities_per_10k_residents"] = per_10k
+    out["engagement_gap_score"] = gap
 
     out_path = PROCESSED_DIR / "category_scores.csv"
     out.to_csv(out_path, index=False)

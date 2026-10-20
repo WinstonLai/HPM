@@ -145,6 +145,16 @@ density) and Category F (partnership readiness → scraped operator portfolio
 size), and don't present those proxy scores as the literal metric named in
 the charter without that caveat.
 
+Other deliberate scoring choices to preserve (details in the README's
+limitations section): Category E only counts NParks `PLAYGROUND`/`FITNESS AREA`
+rows (the file is mostly carparks/noticeboards); Category A drops Healthier
+Dining Partner outlets that duplicate a Healthier Eatery (postal code + brand);
+Engagement Gap is amenities-per-resident in the 1.2km catchment, rank-scaled
+and independent of Category C (don't redefine it as `100 - C`, which cancels
+C's Supply contribution). After changing any of these, rebuild with
+`python etl/build_category_scores.py && python etl/build_index.py` and commit
+the refreshed `data/processed/*.csv`, since the Methodology page quotes them.
+
 ## Data sources
 
 All data.gov.sg datasets are pulled live via the current
