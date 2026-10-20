@@ -1,7 +1,8 @@
 """Build the mall registry: scrape THREE Wikipedia sources of Singapore
 shopping malls/commercial centres, union + de-duplicate them, resolve each
 mall's landlord/operator from its own article infobox where one exists, and
-geocode every mall via OneMap. Writes data/processed/malls.csv.
+geocode every mall via OneMap. Writes data/processed/malls.csv (and a
+data/processed/registry_qa.csv audit trail of every rejection/merge).
 
 A single hand-curated "List of..." article undercounts Singapore's shopping
 malls (it only had ~90 in it), so three complementary sources are combined:
@@ -15,6 +16,22 @@ malls (it only had ~90 in it), so three complementary sources are combined:
      #1/#2 (its "Street-side areas" section is skipped: those are streets/
      precincts, not retail buildings)
 
+Registry quality controls (each one fixes a defect found in review):
+  * Geocodes are VALIDATED: OneMap's top hit is often the wrong building, so
+    every candidate is checked against the mall's name (onemap.py). Malls
+    with no validated hit are dropped and listed in registry_qa.csv unless
+    data/manual/geocode_overrides.csv supplies a fix.
+  * Duplicates are collapsed twice: before geocoding (same Wikipedia article
+    after resolving redirects, or the same normalised name) and after (same
+    building: shared postal code, or <=75m apart with a shared distinctive
+    word in the name). Merged names are kept in the `aliases` column.
+  * `mall_id` is a stable slug of the canonical article title, not a row
+    index, and `postal_code` is written as a zero-padded string.
+  * Operator names go through data/manual/operator_aliases.csv (merges e.g.
+    "CapitaMall Trust" / "CapitaLand Mall Trust" into one landlord group and
+    blanks non-landlords), and data/manual/operators.csv lets HPB CIP supply
+    authoritative landlord / partnership facts per mall.
+
 This is the "consolidate mall amenity information into a common repository...
 may include culling information from publicly available sources" deliverable
 from the charter's Milestone 1.
@@ -26,19 +43,27 @@ import sys
 import time
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from onemap import geocode_with_retry  # noqa: E402
+from geo import haversine_m  # noqa: E402
+from onemap import geocode_candidates, geocode_validated, name_tokens  # noqa: E402
 
 WIKI_API = "https://en.wikipedia.org/w/api.php"
 LIST_PAGE = "List_of_shopping_malls_in_Singapore"
 CATEGORY_TITLE = "Category:Shopping malls in Singapore"
 COMMERCIAL_SITES_PAGE = "List_of_commercial_sites_in_Singapore"
 HEADERS = {"User-Agent": "HPM-readiness-poc/1.0 (contact: hpb-cip-poc)"}
-PROCESSED_DIR = Path(__file__).resolve().parent.parent / "data" / "processed"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+PROCESSED_DIR = REPO_ROOT / "data" / "processed"
 PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+MANUAL_DIR = REPO_ROOT / "data" / "manual"
+
+# Post-geocode duplicate detection.
+SAME_BUILDING_MAX_M = 150      # same postal code and this close => same building
+NEAR_DUPLICATE_MAX_M = 75      # this close + shared name word + a missing postal => same mall
 
 WIKI_LINK_RE = re.compile(r"^\*\s*\[\[([^\]|]+)(?:\|([^\]]+))?\]\]", re.MULTILINE)
 # Bullet that may be a wikilink ("*[[Page|Display]]") or plain text ("*Name") -
@@ -51,30 +76,80 @@ REF_STRIP_RE = re.compile(r"<ref[^>]*>.*?</ref>|<ref[^>]*/>", re.DOTALL | re.IGN
 TEMPLATE_STRIP_RE = re.compile(r"\{\{[^{}]*\}\}")
 NON_MALL_SECTIONS = {"references", "see also", "notes", "external links"}
 NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
+NAME_SUFFIX_RE = re.compile(r"\s*(?:,\s*singapore|\((?:singapore|shopping mall|mall)\))\s*$", re.IGNORECASE)
+FORMER_RE = re.compile(r"\(former\)|\bformer\b", re.IGNORECASE)
+
+# An infobox can carry all three; owner is the best proxy for "who the
+# landlord is", management next, developer (who *built* it) last.
+OPERATOR_FIELD_PRIORITY = ("owner", "management", "developer")
+
+# Words that don't identify a particular mall when deciding whether two
+# nearby records are the same place.
+_NAME_GENERIC = {"mall", "centre", "center", "shopping", "plaza", "complex", "building",
+                 "town", "square", "point", "city", "hub", "place"}
+
+
+def clean_name(name: str) -> str:
+    """Strip Wikipedia disambiguation noise: "Funan, Singapore" -> "Funan",
+    "IMM (Singapore)" -> "IMM"."""
+    return NAME_SUFFIX_RE.sub("", name or "").strip()
 
 
 def dedupe_key(name: str) -> str:
-    return NON_ALNUM_RE.sub("", name.lower())
+    """Identity key tolerant of "The ...", ", Singapore" suffixes, punctuation
+    and number words ("Lot One" == "Lot 1")."""
+    return "".join(name_tokens(clean_name(name)))
+
+
+def slugify(text: str) -> str:
+    return NON_ALNUM_RE.sub("-", clean_name(text).lower()).strip("-")
+
+
+class WikipediaError(RuntimeError):
+    pass
+
+
+def _wiki_get(params: dict, attempts: int = 5) -> dict:
+    """GET the MediaWiki API and return parsed JSON, retrying with back-off.
+    Under load the API intermittently answers with an empty/non-JSON body or
+    a 429/5xx; treating that as "page has no content" silently stripped the
+    operator from dozens of malls, so a persistent failure now raises."""
+    last: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            resp = requests.get(WIKI_API, params=params, headers=HEADERS, timeout=20)
+            if resp.status_code in (429, 500, 502, 503, 504):
+                last = WikipediaError(f"HTTP {resp.status_code}")
+                time.sleep(float(resp.headers.get("Retry-After", 2 * (attempt + 1))))
+                continue
+            resp.raise_for_status()
+            return resp.json()
+        except (requests.RequestException, ValueError) as exc:
+            last = exc
+            time.sleep(2 * (attempt + 1))
+    raise WikipediaError(f"Wikipedia API failed after {attempts} attempts: {last}")
+
+
+def fetch_page(title: str) -> tuple[str, str]:
+    """Return (canonical_title, wikitext) for a Wikipedia page, following
+    redirects ("Funan, Singapore" and "Funan" resolve to one title). Missing
+    pages give (title, "")."""
+    data = _wiki_get({
+        "action": "parse",
+        "page": title,
+        "prop": "wikitext",
+        "redirects": 1,
+        "format": "json",
+        "formatversion": 2,
+    })
+    if "error" in data:  # e.g. missingtitle: plain-text entries have no article
+        return title, ""
+    parsed = data.get("parse", {})
+    return parsed.get("title", title), parsed.get("wikitext", "")
 
 
 def fetch_wikitext(title: str) -> str:
-    resp = requests.get(
-        WIKI_API,
-        params={
-            "action": "parse",
-            "page": title,
-            "prop": "wikitext",
-            "format": "json",
-            "formatversion": 2,
-        },
-        headers=HEADERS,
-        timeout=20,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    if "error" in data:
-        return ""
-    return data.get("parse", {}).get("wikitext", "")
+    return fetch_page(title)[1]
 
 
 def scrape_regional_list() -> list[dict]:
@@ -98,26 +173,22 @@ def scrape_category_members() -> list[dict]:
     """Source 2: every article directly tagged Category:Shopping malls in
     Singapore (broader than the curated list; excludes defunct malls since
     those only sit in the "Defunct shopping malls" subcategory)."""
-    resp = requests.get(
-        WIKI_API,
-        params={
-            "action": "query",
-            "list": "categorymembers",
-            "cmtitle": CATEGORY_TITLE,
-            "cmlimit": 500,
-            "cmtype": "page",
-            "format": "json",
-            "formatversion": 2,
-        },
-        headers=HEADERS,
-        timeout=20,
-    )
-    resp.raise_for_status()
-    members = resp.json().get("query", {}).get("categorymembers", [])
+    data = _wiki_get({
+        "action": "query",
+        "list": "categorymembers",
+        "cmtitle": CATEGORY_TITLE,
+        "cmlimit": 500,
+        "cmtype": "page",
+        "format": "json",
+        "formatversion": 2,
+    })
+    members = data.get("query", {}).get("categorymembers", [])
     rows = []
     for m in members:
         title = m["title"]
-        if title.lower().startswith("list of"):
+        # categorymembers(cmtype=page) can still return non-article pages such
+        # as "Template:Shopping malls in Singapore".
+        if title.lower().startswith("list of") or ":" in title:
             continue
         rows.append({"page_title": title, "name": title, "region": "Unknown"})
     return rows
@@ -147,40 +218,190 @@ def scrape_commercial_estates() -> list[dict]:
 
 
 def scrape_mall_list() -> pd.DataFrame:
-    """Union + de-duplicate all three sources. De-dup keys on the normalised
-    Wikipedia *page_title* (the canonical article identifier) rather than
-    the display name, so the same mall wikilinked with different display
-    text across sources (or with punctuation/spacing differences) still
-    collapses into one row -- display-name text varies more than the page
-    it links to. Source 3's plain-text-only entries (no article) fall back
-    to a name-based key, since page_title == name for those. Earlier
-    sources win on conflicting page_title/region, since sources 1 and 2 are
-    wikilinked (usable for infobox scraping) while source 3 is a
-    lower-confidence supplementary list."""
+    """Union + de-duplicate all three sources. A row is dropped if EITHER its
+    Wikipedia page title or its cleaned display name normalises to a key
+    already seen, so "Seletar Mall" / "The Seletar Mall", "Funan" / "Funan,
+    Singapore" and "Lot 1" / "Lot One" collapse even when linked to
+    different page titles. Earlier sources win on conflicting page_title/
+    region, since sources 1 and 2 are wikilinked (usable for infobox
+    scraping) while source 3 is a lower-confidence supplementary list.
+    Redirect-level duplicates that only show up after fetching each article
+    are caught later, in build_registry."""
     all_rows = scrape_regional_list() + scrape_category_members() + scrape_commercial_estates()
-    seen: dict[str, dict] = {}
+    seen: set[str] = set()
+    kept: list[dict] = []
     for row in all_rows:
-        key = dedupe_key(row["page_title"]) or dedupe_key(row["name"])
-        if key and key not in seen:
-            seen[key] = row
-    df = pd.DataFrame(seen.values()).reset_index(drop=True)
-    return df
+        keys = {k for k in (dedupe_key(row["page_title"]), dedupe_key(row["name"])) if k}
+        if not keys or keys & seen:
+            continue
+        seen |= keys
+        kept.append(row)
+    return pd.DataFrame(kept).reset_index(drop=True)
+
+
+# --- operators -------------------------------------------------------------
+
+def _load_manual_csv(filename: str) -> pd.DataFrame:
+    path = MANUAL_DIR / filename
+    if not path.exists():
+        return pd.DataFrame()
+    return pd.read_csv(path, dtype=str).fillna("")
+
+
+def load_operator_aliases() -> dict[str, str]:
+    """raw operator text (lower-cased) -> landlord group. A blank group means
+    "not a landlord" (e.g. a cinema chain, a former tenant) and becomes
+    "Unknown"."""
+    df = _load_manual_csv("operator_aliases.csv")
+    if df.empty:
+        return {}
+    return {r.raw_operator.strip().lower(): r.landlord_group.strip() for r in df.itertuples()}
+
+
+def clean_operator(raw: str, aliases: dict[str, str]) -> str:
+    raw = (raw or "").strip()
+    if not raw or raw == "Unknown" or FORMER_RE.search(raw):
+        return "Unknown"
+    group = aliases.get(raw.lower(), raw)
+    return group or "Unknown"
 
 
 def extract_operator(wikitext: str) -> str:
+    """Raw landlord text from the article infobox, preferring owner over
+    management over developer. Returns "Unknown" when none is present."""
+    found: dict[str, str] = {}
     for line in wikitext.splitlines():
         m = INFOBOX_FIELD_RE.match(line.strip())
         if not m:
             continue
+        field = m.group(1).lower()
         value = m.group(2)
         value = REF_STRIP_RE.sub("", value)
         value = TEMPLATE_STRIP_RE.sub("", value)
         value = WIKILINK_STRIP_RE.sub(r"\1", value)
         value = value.split("<br")[0].split("*")[0]
         value = value.strip(" '\"\t")
-        if value:
-            return value
+        if value and field not in found:
+            found[field] = value
+    for field in OPERATOR_FIELD_PRIORITY:
+        if field in found:
+            return found[field]
     return "Unknown"
+
+
+# --- geocoding -------------------------------------------------------------
+
+def load_geocode_overrides() -> dict[str, dict]:
+    """Manual geocode fixes keyed by dedupe_key(name). A row gives either
+    lat/lon directly, or a `query` to search for (top hit accepted, since a
+    human has vouched for the query)."""
+    df = _load_manual_csv("geocode_overrides.csv")
+    return {dedupe_key(r.name): r._asdict() for r in df.itertuples(index=False)} if not df.empty else {}
+
+
+def resolve_geocode(name: str, overrides: dict[str, dict]) -> tuple[dict | None, str]:
+    """(geocode result or None, how it was obtained: override/validated/none)."""
+    ov = overrides.get(dedupe_key(name))
+    if ov:
+        if ov.get("lat") and ov.get("lon"):
+            postal = ov.get("postal_code", "").strip()
+            return ({"lat": float(ov["lat"]), "lon": float(ov["lon"]),
+                     "postal_code": postal.zfill(6) if postal else None,
+                     "address": ov.get("note") or "manual override", "building": name}, "override")
+        if ov.get("query"):
+            cands = geocode_candidates(ov["query"])
+            if cands:
+                return cands[0], "override"
+    return geocode_validated(clean_name(name)), "validated"
+
+
+def _distinctive_tokens(name: str) -> set[str]:
+    return {t for t in name_tokens(clean_name(name)) if t not in _NAME_GENERIC and len(t) > 1}
+
+
+def merge_duplicates(df: pd.DataFrame) -> tuple[pd.DataFrame, list[dict]]:
+    """Collapse records that describe the same mall, using the geocoded
+    position. Two records are the same mall when they share a canonical
+    Wikipedia article, or share a postal code within SAME_BUILDING_MAX_M, or
+    sit within NEAR_DUPLICATE_MAX_M with a shared distinctive name word and
+    at least one missing postal code. Records with different postal codes
+    are never merged on proximity alone (adjacent malls such as Bugis
+    Junction / Bugis+ stay separate)."""
+    n = len(df)
+    parent = list(range(n))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    reasons: dict[tuple[int, int], str] = {}
+    lat, lon = df["lat"].to_numpy(float), df["lon"].to_numpy(float)
+    postal = df["postal_code"].tolist()
+    canon = df["canonical_title"].tolist()
+    tokens = [_distinctive_tokens(nm) for nm in df["name"]]
+    for i in range(n):
+        dist = haversine_m(lat[i], lon[i], lat, lon)
+        for j in range(i + 1, n):
+            reason = None
+            if canon[i] and canon[i] == canon[j]:
+                reason = "same Wikipedia article"
+            elif postal[i] and postal[i] == postal[j] and dist[j] <= SAME_BUILDING_MAX_M:
+                reason = f"same postal code {postal[i]}"
+            elif dist[j] <= NEAR_DUPLICATE_MAX_M and not (postal[i] and postal[j]) and tokens[i] & tokens[j]:
+                reason = f"{dist[j]:.0f}m apart, shared name word"
+            if reason:
+                reasons[(i, j)] = reason
+                parent[find(j)] = find(i)
+
+    groups: dict[int, list[int]] = {}
+    for i in range(n):
+        groups.setdefault(find(i), []).append(i)
+
+    rows, qa = [], []
+    for members in groups.values():
+        members.sort()  # source order: earlier = region-organised list wins
+        rep = df.iloc[members[0]].to_dict()
+        if len(members) > 1:
+            others = df.iloc[members[1:]]
+            rep["aliases"] = "; ".join(others["name"])
+            for col in ("operator", "region", "postal_code", "address"):
+                if rep.get(col) in (None, "", "Unknown") or (isinstance(rep.get(col), float) and np.isnan(rep[col])):
+                    for v in df.iloc[members][col]:
+                        if v not in (None, "", "Unknown") and not (isinstance(v, float) and np.isnan(v)):
+                            rep[col] = v
+                            break
+            for other in members[1:]:
+                why = next((reasons[k] for k in reasons if k[1] == other and k[0] in members), "chained duplicate")
+                qa.append({"kind": "merged", "name": df.iloc[other]["name"],
+                           "detail": f"merged into '{rep['name']}' ({why})"})
+        else:
+            rep["aliases"] = ""
+        rows.append(rep)
+    return pd.DataFrame(rows), qa
+
+
+def apply_manual_operators(df: pd.DataFrame) -> pd.DataFrame:
+    """Overlay data/manual/operators.csv (name, landlord_group, hpb_partner,
+    source) onto the scraped operators. This is where HPB CIP's authoritative
+    landlord and partnership facts go; scraped values are only the fallback."""
+    df = df.copy()
+    df["hpb_partner"] = 0
+    manual = _load_manual_csv("operators.csv")
+    if manual.empty:
+        return df
+    by_key = {dedupe_key(r.name): r for r in manual.itertuples(index=False)}
+    for idx, row in df.iterrows():
+        keys = [dedupe_key(row["name"])] + [dedupe_key(a) for a in str(row.get("aliases") or "").split("; ") if a]
+        rec = next((by_key[k] for k in keys if k in by_key), None)
+        if rec is None:
+            continue
+        if rec.landlord_group.strip():
+            df.at[idx, "operator"] = rec.landlord_group.strip()
+        if rec.hpb_partner.strip() in ("1", "true", "True", "yes"):
+            df.at[idx, "hpb_partner"] = 1
+    return df
 
 
 def build_registry(limit: int | None = None, sleep_s: float = 0.3) -> pd.DataFrame:
@@ -188,38 +409,77 @@ def build_registry(limit: int | None = None, sleep_s: float = 0.3) -> pd.DataFra
     if limit:
         malls = malls.head(limit)
 
+    aliases = load_operator_aliases()
+    overrides = load_geocode_overrides()
+    qa: list[dict] = []
     records = []
+    seen_canonical: dict[str, str] = {}
     total = len(malls)
     for idx, row in malls.iterrows():
         page_title, name, region = row["page_title"], row["name"], row["region"]
         try:
-            wikitext = fetch_wikitext(page_title)
-        except requests.RequestException:
-            wikitext = ""
-        operator = extract_operator(wikitext) if wikitext else "Unknown"
-
-        geo = geocode_with_retry(name) or geocode_with_retry(f"{name} Singapore")
-        if not geo:
-            print(f"  [warn] could not geocode: {name}")
+            canonical, wikitext = fetch_page(page_title)
+        except WikipediaError as exc:
+            print(f"  [warn] Wikipedia fetch failed for {page_title!r}: {exc}")
+            qa.append({"kind": "wiki_fetch_failed", "name": name,
+                       "detail": "operator unknown because the article could not be fetched; re-run"})
+            canonical, wikitext = page_title, ""
+        # Two scraped titles that redirect to one article are one mall.
+        ckey = dedupe_key(canonical)
+        if wikitext and ckey in seen_canonical:
+            qa.append({"kind": "merged", "name": name,
+                       "detail": f"redirects to the same article as '{seen_canonical[ckey]}'"})
             continue
+
+        raw_operator = extract_operator(wikitext) if wikitext else "Unknown"
+        operator = clean_operator(raw_operator, aliases)
+
+        geo, how = resolve_geocode(name, overrides)
+        if not geo:
+            print(f"  [reject] no validated geocode for: {name}")
+            qa.append({"kind": "geocode_rejected", "name": name,
+                       "detail": "no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv"})
+            continue
+        if how == "override":
+            qa.append({"kind": "geocode_override", "name": name, "detail": f"{geo['lat']:.5f},{geo['lon']:.5f}"})
+        if wikitext:
+            seen_canonical[ckey] = name
 
         records.append(
             {
-                "mall_id": idx,
-                "name": name,
+                "mall_id": slugify(canonical if wikitext else name),
+                "name": clean_name(name),
                 "region": region,
                 "operator": operator,
                 "lat": geo["lat"],
                 "lon": geo["lon"],
                 "postal_code": geo.get("postal_code"),
                 "address": geo.get("address"),
+                "canonical_title": canonical if wikitext else "",
             }
         )
         print(f"  [{idx + 1}/{total}] {name} -> operator={operator!r} "
-              f"({geo['lat']:.4f},{geo['lon']:.4f})")
+              f"({geo['lat']:.4f},{geo['lon']:.4f}) [{how}]")
         time.sleep(sleep_s)
 
-    return pd.DataFrame(records)
+    df, merge_qa = merge_duplicates(pd.DataFrame(records))
+    qa.extend(merge_qa)
+    print(f"\nMerged {len(merge_qa)} duplicate records; rejected "
+          f"{sum(1 for q in qa if q['kind'] == 'geocode_rejected')} unverifiable geocodes.")
+
+    df = apply_manual_operators(df)
+    # Stable, unique ids (a slug collision gets a numeric suffix).
+    counts: dict[str, int] = {}
+    ids = []
+    for mid in df["mall_id"]:
+        counts[mid] = counts.get(mid, 0) + 1
+        ids.append(mid if counts[mid] == 1 else f"{mid}-{counts[mid]}")
+    df["mall_id"] = ids
+    df["postal_code"] = df["postal_code"].astype("string")
+
+    pd.DataFrame(qa, columns=["kind", "name", "detail"]).to_csv(PROCESSED_DIR / "registry_qa.csv", index=False)
+    return df[["mall_id", "name", "aliases", "region", "operator", "hpb_partner",
+               "lat", "lon", "postal_code", "address"]].reset_index(drop=True)
 
 
 if __name__ == "__main__":

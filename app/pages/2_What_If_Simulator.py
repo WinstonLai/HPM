@@ -83,6 +83,12 @@ with st.sidebar:
         list(scoring.DEFAULT_SUPPLY_WEIGHTS.keys()), scoring.DEFAULT_SUPPLY_WEIGHTS, "sw"
     )
 
+    exclude_proxy_categories = st.checkbox(
+        "Exclude proxy categories (H365 & HPB Engagement, Partnership Readiness)",
+        help="These two are stand-ins (community-club proximity, landlord portfolio size), not the "
+             "metrics the charter names. Ticking this sets their weight to 0 and re-scales the rest.",
+    )
+
     st.header("Demand Opportunity weights")
     st.caption("Also linked, summing to 100%.")
     demand_weights = linked_weight_sliders(
@@ -93,6 +99,9 @@ with st.sidebar:
     supply_block_weight = st.slider("Supply Readiness weight (%)", 0, 100, 70)
     demand_block_weight = 100 - supply_block_weight
     st.caption(f"Demand Opportunity weight: **{demand_block_weight}%**")
+
+if exclude_proxy_categories:
+    supply_weights = scoring.exclude_proxies(supply_weights)
 
 result = scoring.compute_index(
     category_scores,

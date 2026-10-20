@@ -49,7 +49,7 @@ fabricated. All data.gov.sg datasets are pulled live via the current
 
 | Category | Datasets | Publisher |
 |---|---|---|
-| Mall registry | Three Wikipedia sources unioned + de-duplicated: "List of shopping malls in Singapore", `Category:Shopping malls in Singapore`, and the "Housing estate commercial areas" section of "List of commercial sites in Singapore" (185 malls) — geocoded via OneMap Search API | Wikipedia / OneMap (SLA) |
+| Mall registry | Three Wikipedia sources unioned + de-duplicated: "List of shopping malls in Singapore", `Category:Shopping malls in Singapore`, and the "Housing estate commercial areas" section of "List of commercial sites in Singapore" (173 malls after de-duplication and geocode validation) — geocoded via OneMap Search API | Wikipedia / OneMap (SLA) |
 | A – Healthy Dining | Healthier Eateries, Healthier Dining Partners – F&B Partners, List of Supermarket Licences | HPB / NEA |
 | B – Physical Activity | Gyms@SG, SportSG Sport Facilities | HPB / SportSG |
 | C – H365 & HPB Engagement | Community Club / PAssion WaVe Outlet (proxy — see Limitations) | People's Association |
@@ -62,9 +62,23 @@ Exact dataset IDs are in `etl/build_amenities.py`.
 
 ## Methodology
 
+- **Mall registry quality controls**: OneMap's top search hit is frequently
+  the wrong building (it ranks a Taman Jurong clinic above Jurong Point, a
+  primary school above White Sands, Nexus International School above NEX),
+  so every candidate is checked against the mall's name and only a matching
+  one is accepted; malls with no match are dropped and listed in
+  `data/processed/registry_qa.csv` unless `data/manual/geocode_overrides.csv`
+  supplies a fix. Duplicates (the same article under two titles, "The X" vs
+  "X", the same building geocoded twice) are merged and the other names kept
+  in the `aliases` column. `mall_id` is a stable slug and `postal_code` a
+  zero-padded string.
 - **Matching amenities to malls**: datasets with a clean building-name field
   (e.g. `ADDRESSBUILDINGNAME`, `BUILDING_NAME`) are matched by normalised
-  name equality; everything is additionally matched by straight-line
+  name equality — accepted only within 500m of the mall, and skipped for
+  names shared by several malls (e.g. "Rivervale Plaza"/"Rivervale Mall");
+  name matches rejected for distance are written to
+  `data/processed/matching_qa.csv` as a bad-geocode signal. Everything is
+  additionally matched by straight-line
   (haversine) distance — 200m for on-site amenities (dining/fitness/
   healthcare/bicycle racks), 500m for "nearby" amenities (community
   clubs/parks), and 1.2km for demand-side catchment (population/MRT/bus).
@@ -94,7 +108,7 @@ Exact dataset IDs are in `etl/build_amenities.py`.
 - **Region assignment**: every mall's `region` is the URA region of its
   *nearest* Master Plan subzone centroid (Central/East/North/North-East/
   West), computed after geocoding — not the region label from whichever
-  Wikipedia source it came from (most of the 185 malls, sourced from the
+  Wikipedia source it came from (most of the malls, sourced from the
   Wikipedia category and commercial-sites lists rather than the
   region-organised list article, don't carry one at scrape time). This keeps
   region consistent and data-driven across the whole registry regardless of
@@ -113,10 +127,14 @@ Exact dataset IDs are in `etl/build_amenities.py`.
   exists — HPB's own website names only one confirmed partner (Downtown
   East). Proxied by the scraped mall operator's portfolio size (a bigger
   chain is more likely to have centralised CSR/health-programme capacity),
-  plus a +20 bonus for the one confirmed partnership. Operator names are
-  free text pulled from Wikipedia infoboxes and are not deduplicated across
-  near-identical entity names (e.g. "CapitaLand Mall Trust" vs "CapitaLand
-  Mall Trust Management").
+  plus a +20 bonus for the one confirmed partnership. The infobox
+  field used is owner, else management, else developer. Known variants of
+  one landlord are merged by hand in `data/manual/operator_aliases.csv`
+  (e.g. all the CapitaLand trust names → "CapitaLand"), and
+  `data/manual/operators.csv` lets HPB CIP supply authoritative landlord
+  and `hpb_partner` facts per mall, which override the scraped values.
+  Operator names not in the alias table are still free text and may not
+  merge.
 - **Category A "% of F&B outlets in HDP"**: no public per-mall total-tenant-
   count dataset exists, so Category A is a density score (HDP outlets +
   Healthier Dining Partners + licensed supermarkets found near the mall),
@@ -143,25 +161,37 @@ Exact dataset IDs are in `etl/build_amenities.py`.
   dropped when an eatery with the same postal code + brand exists, and
   verbatim-repeated partner rows are collapsed. Outlets with no parseable
   postal code or a differently spelled brand can still be double-counted.
-- **Category F coverage**: an operator was found for only a small minority of
-  malls (24 of 185 at the time of writing); the rest are "Unknown", score 0,
-  so Category F barely differentiates malls.
+- **Category F coverage**: a landlord was found for about half the malls
+  (89 of 173 at the time of writing); the rest are "Unknown" and count as a
+  portfolio of one, so Category F is still non-zero for only 30 malls. (An
+  earlier build found just 24: Wikipedia fetches that failed under load were
+  silently treated as "no infobox". They now retry, and a persistent failure
+  is recorded in `registry_qa.csv`.)
 - **Tiers and quadrants** are relative: tiers are quartiles of the rank
   (top quarter = Platinum … bottom quarter = Bronze); quadrants split Supply
   and Demand at their medians.
 - **Engagement Gap** ("untapped demand"): health-promoting amenities
-  (healthier eateries, gyms/sport facilities, CHAS clinics) within 1.2km per
-  10,000 residents of the same catchment, inverted — fewest per resident =
-  100. Scaled by rank rather than min-max because the ratio is extremely
-  heavy-tailed; a mall with no residents in its catchment scores 0.
-  Community Clubs are deliberately excluded so the factor doesn't simply
-  mirror Category C (an earlier version defined it as `100 - Category C`,
-  which cancelled C's own Supply contribution almost exactly). It is
-  positively correlated (~0.8) with Reach & Population, since the same
-  population figure is the denominator.
+  (healthier eateries, gyms/sport facilities, CHAS clinics) within 1.2km,
+  compared with the number a catchment of that population would typically
+  have (a fitted `log(amenities) = a + b·log(population)` trend across all
+  malls). Malls are rank-scaled on the shortfall — biggest shortfall = 100 —
+  because the residuals are heavy-tailed. A plain amenities-per-resident
+  ratio was tried first, but it correlated ~0.8 with Reach & Population, so
+  population counted twice in the Demand block; the residual is uncorrelated
+  with population by construction. A mall with no residents in its catchment
+  has no meaningful gap: the score is NaN ("n/a") and `scoring_formula`
+  re-weights that mall's Demand score over its other factors rather than
+  scoring it 0. Community Clubs are deliberately excluded so the factor
+  doesn't simply mirror Category C (an earlier version defined it as
+  `100 - Category C`, which cancelled C's own Supply contribution almost
+  exactly).
 - **Default weights**: the charter's illustrative Supply weights
   (25/20/15/10/10/10, summing to 90 because Demand Potential was 10) are
-  re-scaled to sum to 100 within the Supply block; the Demand block's three
+  re-scaled to sum to 100 within the Supply block, except that the two
+  proxy categories start lower (H365 & HPB Engagement 15 → 10, Partnership
+  Readiness 10 → 5) because they are coarse stand-ins; the charter values
+  are kept as `CHARTER_SUPPLY_WEIGHTS` in `etl/scoring_formula.py`, and the
+  What-If Simulator can switch both proxies off. The Demand block's three
   factors are weighted equally (the charter doesn't specify them).
 
 ## Repository layout
@@ -182,5 +212,7 @@ app/                 Streamlit dashboard
   pages/              Pages 2-7
 data/
   raw/               cached raw downloads (gitignored)
-  processed/         malls.csv, category_scores.csv, hpm_index.csv (committed)
+  manual/            hand-maintained inputs: geocode_overrides.csv, operator_aliases.csv, operators.csv
+  processed/         malls.csv, category_scores.csv, hpm_index.csv, plus registry_qa.csv /
+                     matching_qa.csv audit trails (committed)
 ```

@@ -1,0 +1,50 @@
+kind,name,detail
+geocode_override,Clarke Quay Central,"1.28887,103.84680"
+geocode_rejected,Holland Village Shopping Mall,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_override,Shaw House and Centre,"1.30581,103.83151"
+geocode_rejected,Tekka Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+merged,Novena Square Shopping Mall,redirects to the same article as 'Square 2'
+geocode_override,i12 Katong,"1.30521,103.90505"
+geocode_override,Tampines 1,"1.35426,103.94507"
+geocode_rejected,"Capitol Centre, Singapore",no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+merged,Capitol Singapore,redirects to the same article as 'Capitol Piazza'
+geocode_rejected,"Change Alley, Singapore",no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Eng Wah Global,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_override,Golden Landmark Shopping Complex,"1.30197,103.85780"
+geocode_rejected,Golden Mile Shopping Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_override,Orchard Point,"1.30137,103.84055"
+merged,Raffles City Shopping Centre,redirects to the same article as 'Raffles City'
+geocode_override,Tangs,"1.30506,103.83306"
+geocode_rejected,Bishan Neighbourhood 1 Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Bishan Town Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Bukit Batok Town Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Bukit Batok West Shopping Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Bukit Merah Town Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Telok Blangah Neighbourhood Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Bukit Panjang Town Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Fajar Neighbourhood Shopping Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Choa Chu Kang Town Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Geylang East Central,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Geylang Serai Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Central Place,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Hougang Town Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Jurong East Neighbourhood 4 Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Jurong Entertainment Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Jurong East Regional Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Jurong West Town Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Taman Jurong Neighbourhood Shopping Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Pasir Ris Town Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Pasir Ris Neighbourhood 4 Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+merged,White Sands Shopping Centre,redirects to the same article as 'White Sands'
+geocode_rejected,Punggol Town Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Fernvale Point,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Queenstown Town Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Sembawang Town Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Sengkang Town Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Serangoon North Neighbourhood Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Serangoon Town Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Tampines Regional Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Toa Payoh Town Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Woodlands Regional Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+geocode_rejected,Rochor Centre,no OneMap candidate matched the name; add a row to data/manual/geocode_overrides.csv
+merged,Stamford House,merged into 'Capitol Building' (same postal code 178906)

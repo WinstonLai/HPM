@@ -180,10 +180,31 @@ def load_points(filename: str) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def ambiguous_name_keys(malls: pd.DataFrame) -> set[str]:
+    """Lenient name keys shared by more than one mall ("Rivervale Plaza" and
+    "Rivervale Mall" both reduce to "rivervale"). Name equality can't tell
+    those malls apart, so it is not used for them -- only distance is."""
+    keys = malls["name"].map(normalize_name)
+    return set(keys[keys.duplicated(keep=False)]) - {""}
+
+
+# Name-equality matches are accepted only this close to the mall. The
+# lenient key reduces e.g. "Tampines Mall"/"Tampines Plaza"/"Tampines Centre"
+# to one word, and a geocode error can put a mall kilometres from its own
+# building; without a bound either case silently pulls in far-away amenities.
+NAME_MATCH_MAX_M = 500
+
+# Name matches rejected for being too far away. A mall that shows up here
+# usually has a bad geocode, so this doubles as a registry QA signal.
+FAR_NAME_MATCHES: list[dict] = []
+
+
 def count_nearby(malls: pd.DataFrame, points: pd.DataFrame, radius_m: float,
-                  building_col: str | None = None) -> np.ndarray:
+                  building_col: str | None = None, label: str = "") -> np.ndarray:
     """For each mall, count how many `points` are within radius_m OR share a
-    normalised building name with the mall (when building_col is given)."""
+    normalised building name with the mall (when building_col is given) AND
+    lie within NAME_MATCH_MAX_M of it. Name equality is skipped for names
+    shared by several malls (see ambiguous_name_keys)."""
     counts = np.zeros(len(malls), dtype=int)
     if points.empty:
         return counts
@@ -194,14 +215,22 @@ def count_nearby(malls: pd.DataFrame, points: pd.DataFrame, radius_m: float,
     point_names = None
     if building_col and building_col in points.columns:
         point_names = points[building_col].fillna("").map(normalize_name).to_numpy()
+    ambiguous = ambiguous_name_keys(malls) if point_names is not None else set()
 
     for i, mall in enumerate(malls.itertuples()):
         dist = haversine_m(mall.lat, mall.lon, plat, plon)
         mask = dist <= radius_m
         if point_names is not None:
             mall_norm = normalize_name(mall.name)
-            if mall_norm:
-                mask = mask | (point_names == mall_norm)
+            if mall_norm and mall_norm not in ambiguous:
+                name_hit = point_names == mall_norm
+                mask = mask | (name_hit & (dist <= NAME_MATCH_MAX_M))
+                far = name_hit & (dist > NAME_MATCH_MAX_M)
+                if far.any():
+                    FAR_NAME_MATCHES.append({
+                        "dataset": label, "mall": mall.name, "n_far_name_matches": int(far.sum()),
+                        "max_distance_m": int(dist[far].max()),
+                    })
         counts[i] = int(mask.sum())
     return counts
 
@@ -309,48 +338,87 @@ def compute_population_catchment(malls: pd.DataFrame, centroids: pd.DataFrame) -
 
 def compute_untapped_demand(malls: pd.DataFrame, pop_catchment: np.ndarray,
                             point_sets: list[pd.DataFrame]) -> tuple[np.ndarray, np.ndarray, pd.Series]:
-    """Engagement Gap ("untapped demand"): health-promoting amenities (healthier
-    eateries, gyms/sport facilities, CHAS clinics) within the 1.2km catchment
-    per 10,000 residents, inverted so FEWER amenities per resident = HIGHER
-    gap. The ratio is extremely heavy-tailed (tiny-population catchments give
-    huge values), which min-max scaling would let squash everyone else, so
-    this one factor is scaled by RANK instead: the mall with the lowest
-    density scores 100, the highest scores 0. A mall with no resident
-    population in its catchment gets a gap of 0 (nobody to serve). Community
-    clubs (Category C) are intentionally excluded -- see the call site."""
+    """Engagement Gap ("untapped demand"): how FEW health-promoting amenities
+    (healthier eateries, gyms/sport facilities, CHAS clinics) the 1.2km
+    catchment has *for the number of residents it has*.
+
+    A plain amenities-per-resident ratio is almost a function of population
+    (Spearman ~0.8 with Reach & Population), which made population count
+    twice in the Demand block. Instead we fit the typical amenity count for a
+    given population -- log(amenities) = a + b*log(population) across all
+    malls -- and score each mall by how far BELOW that expectation it sits.
+    That residual is, by construction, uncorrelated with log-population, so
+    this factor adds new information rather than repeating Reach.
+
+    The residual is rank-scaled (the heavy tails would crush a min-max scale):
+    the biggest shortfall scores 100, the biggest surplus 0. A mall with no
+    resident population in its catchment has no meaningful gap, so its score
+    is NaN ("n/a") and the index re-weights over that mall's remaining
+    Demand factors instead of treating it as a hard zero. Community clubs
+    (Category C) are intentionally excluded -- see the call site."""
     pts = pd.concat([p[["lat", "lon"]] for p in point_sets if not p.empty], ignore_index=True)
     amenities = count_nearby(malls, pts, CATCHMENT_RADIUS_M)
     pop = np.asarray(pop_catchment, dtype=float)
-    per_10k = np.where(pop > 0, amenities / np.where(pop > 0, pop, 1) * 10_000, np.nan)
-    density = pd.Series(per_10k)
-    n_ranked = int(density.notna().sum())
-    ranks = density.rank(method="average", ascending=True)  # NaN stays NaN
-    gap = (n_ranked - ranks) / max(n_ranked - 1, 1) * 100
-    gap = gap.fillna(0.0)
+    has_pop = pop > 0
+    per_10k = np.where(has_pop, amenities / np.where(has_pop, pop, 1) * 10_000, np.nan)
+
+    gap = pd.Series(np.nan, index=range(len(malls)))
+    fit = has_pop & (amenities > 0)
+    if fit.sum() >= 3:
+        x, y = np.log(pop[fit]), np.log(amenities[fit].astype(float))
+        slope, intercept = np.polyfit(x, y, 1)
+        residual = pd.Series(y - (intercept + slope * x))
+        ranks = residual.rank(method="average", ascending=True)  # biggest shortfall = rank 1
+        gap.loc[np.flatnonzero(fit)] = ((len(residual) - ranks) / max(len(residual) - 1, 1) * 100).to_numpy()
+    gap.loc[np.flatnonzero(has_pop & (amenities == 0))] = 100.0  # residents, zero amenities: max gap
     return amenities, per_10k, gap
 
 
 def compute_category_f(malls: pd.DataFrame) -> pd.Series:
-    """Partnership Readiness proxy: portfolio scale of the mall's operator
-    (a larger chain is more likely to have centralised CSR/health-programme
-    capacity) plus a bonus for the one publicly confirmed HPM partnership
-    named on HPB's own website (Downtown East)."""
+    """Partnership Readiness proxy: portfolio scale of the mall's landlord
+    group (a larger chain is more likely to have centralised CSR/health-
+    programme capacity) plus a bonus for malls flagged `hpb_partner` -- a
+    confirmed HPB partnership, supplied via data/manual/operators.csv (the
+    registry build copies the flag into malls.csv). The operator column has
+    already been merged into landlord groups by the registry build (see
+    data/manual/operator_aliases.csv), so e.g. all CapitaLand trust names
+    count as one portfolio. Malls with an "Unknown" operator count as a
+    portfolio of one."""
     chain_size = malls.groupby("operator")["operator"].transform("count")
     chain_size = chain_size.where(malls["operator"] != "Unknown", 1)
     chain_score = min_max_normalize(chain_size)
 
-    confirmed_partners = {normalize_name("Downtown East")}
-    bonus = malls["name"].map(normalize_name).isin(confirmed_partners).astype(float) * 20
+    if "hpb_partner" in malls.columns:
+        partner = malls["hpb_partner"].fillna(0).astype(float) > 0
+    else:  # registry built before the manual operators table existed
+        partner = malls["name"].map(normalize_name) == normalize_name("Downtown East")
+    bonus = partner.astype(float) * 20
 
     return (chain_score * 0.8 + bonus).clip(upper=100)
 
 
+def write_matching_qa() -> None:
+    """Report name-equality matches that were rejected for being too far from
+    the mall. Each row is a mall whose own building (by name) sits well away
+    from where it was geocoded -- fix the geocode in
+    data/manual/geocode_overrides.csv."""
+    qa = pd.DataFrame(FAR_NAME_MATCHES, columns=["dataset", "mall", "n_far_name_matches", "max_distance_m"])
+    qa.sort_values("n_far_name_matches", ascending=False).to_csv(PROCESSED_DIR / "matching_qa.csv", index=False)
+    if qa.empty:
+        print("  [qa] no name-matched amenity lies >%dm from its mall" % NAME_MATCH_MAX_M)
+    else:
+        print(f"  [qa] {qa['mall'].nunique()} malls have name-matched amenities >{NAME_MATCH_MAX_M}m away "
+              "(possible bad geocode) -- see data/processed/matching_qa.csv")
+
+
 def build_category_scores() -> pd.DataFrame:
     malls_path = PROCESSED_DIR / "malls.csv"
-    malls = pd.read_csv(malls_path)
+    malls = pd.read_csv(malls_path, dtype={"postal_code": str})
     print(f"Loaded {len(malls)} malls from {malls_path}")
+    FAR_NAME_MATCHES.clear()
 
     out = malls[["mall_id", "name", "region", "operator", "lat", "lon"]].copy()
+    out["operator_known"] = (malls["operator"] != "Unknown").astype(int)
 
     print("Assigning authoritative region (nearest URA subzone) ...")
     subzone_centroids = load_subzone_centroids()
@@ -358,6 +426,11 @@ def build_category_scores() -> pd.DataFrame:
 
     print("Category A - Healthy Dining Ecosystem (incl. supermarkets) ...")
     dining = load_points("healthier_eateries.geojson")
+    # The HPB file repeats some outlets verbatim (same name, postal code and
+    # coordinates) -- count each outlet once.
+    dining = dining.drop_duplicates(
+        subset=[c for c in ("ADDRESSPOSTALCODE", "NAME", "lat", "lon") if c in dining.columns]
+    ).reset_index(drop=True)
     dining_partners = load_deduped_partner_addresses(dining)
     # NEA's licence list has no single address field -- build one from its
     # separate building_name/block_house_num/street_name columns.
@@ -366,7 +439,7 @@ def build_category_scores() -> pd.DataFrame:
     )
     out["A_supermarket_count"] = count_by_address_text(malls, supermarkets)
     out["A_dining_count"] = (
-        count_nearby(malls, dining, ON_SITE_RADIUS_M, "ADDRESSBUILDINGNAME")
+        count_nearby(malls, dining, ON_SITE_RADIUS_M, "ADDRESSBUILDINGNAME", label="healthier_eateries")
         + count_by_address_text(malls, dining_partners)
         + out["A_supermarket_count"]
     )
@@ -389,7 +462,7 @@ def build_category_scores() -> pd.DataFrame:
     healthcare = load_points("chas_clinics.geojson")
     pharmacies = load_csv_addresses("licensed_pharmacies.csv", "PharmacyAddress")
     out["D_healthcare_count"] = (
-        count_nearby(malls, healthcare, ON_SITE_RADIUS_M, "BUILDING_NAME")
+        count_nearby(malls, healthcare, ON_SITE_RADIUS_M, "BUILDING_NAME", label="chas_clinics")
         + count_by_address_text(malls, pharmacies)
     )
     out["D_healthcare_score"] = min_max_normalize(out["D_healthcare_count"])
@@ -438,6 +511,8 @@ def build_category_scores() -> pd.DataFrame:
     out["area_health_amenities"] = area_amenities
     out["area_amenities_per_10k_residents"] = per_10k
     out["engagement_gap_score"] = gap
+
+    write_matching_qa()
 
     out_path = PROCESSED_DIR / "category_scores.csv"
     out.to_csv(out_path, index=False)

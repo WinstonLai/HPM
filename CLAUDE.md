@@ -61,17 +61,27 @@ Two independent halves connected only through `data/processed/*.csv`:
      subcategory since it only returns direct members) and the "Housing
      estate commercial areas" section of "List of commercial sites in
      Singapore" (neighbourhood centres, some plain-text with no Wikipedia
-     article). Combined this yields ~230 candidates → 185 after failed
-     geocodes are dropped. Uses wikitext parsing, not HTML — the live page's
+     article). Combined this yields ~215 candidates → ~173 after duplicates
+     are merged and unverifiable geocodes are dropped (see `registry_qa.csv`). Uses wikitext parsing, not HTML — the live page's
      rendered HTML wraps mall lists in Parsoid `data-mw` transclusion JSON
      with no `<a>` tags, so `action=parse&prop=wikitext` is used instead.
-     Each mall's own article is fetched for its infobox operator/owner field
-     (most of the 185 have no infobox and end up "Unknown" — this is
-     genuine data sparsity, not a scraping bug), and every mall is geocoded
-     via OneMap → `data/processed/malls.csv`.
+     Each mall's own article is fetched (redirects followed) for its infobox
+     owner/management/developer field (most malls have no infobox and end up
+     "Unknown" — this is genuine data sparsity, not a scraping bug), cleaned
+     through `data/manual/operator_aliases.csv` and overridden by
+     `data/manual/operators.csv` where HPB CIP has supplied facts. Every
+     mall is geocoded via OneMap → `data/processed/malls.csv`.
+     **Geocodes are validated**: OneMap's top hit is often the wrong
+     building, so `onemap.geocode_validated` walks all candidates and
+     accepts only one whose BUILDING text matches the mall name; malls with
+     no match are dropped into `data/processed/registry_qa.csv` unless
+     `data/manual/geocode_overrides.csv` fixes them. Duplicates are merged
+     before and after geocoding (`aliases` column keeps the other names),
+     `mall_id` is a slug, and `postal_code` is a zero-padded string — read it
+     with `dtype={"postal_code": str}`.
    - `build_category_scores.py` also assigns the authoritative `region`
      (nearest URA Master Plan subzone centroid) for every mall, overriding
-     whatever region a mall's Wikipedia source gave it — most of the 185
+     whatever region a mall's Wikipedia source gave it — most malls
      don't carry one at scrape time since only the first of the three
      sources above is region-organised.
    - `build_amenities.py` downloads the 15 raw datasets (dataset IDs are
@@ -136,6 +146,13 @@ based on what fields it actually publishes:
   merely located in the town of Tampines. If you add another free-text
   address dataset, use `normalize_name_strict`, not `normalize_name`.
 
+- **Trap**: building-name *equality* matching (`count_nearby`) is bounded
+  to `NAME_MATCH_MAX_M` (500m) and skipped for name keys shared by several
+  malls — the lenient key collapses "Rivervale Plaza"/"Rivervale Mall" and
+  "Tampines Mall"/"Tampines Plaza" to one word. Rejected far matches go to
+  `data/processed/matching_qa.csv`; a mall listed there probably has a bad
+  geocode.
+
 Every raw count is min-max normalized to 0–100 across the mall population
 (not divided by each mall's total tenant count, which the charter's own
 worked example uses — that needs a per-mall tenant directory that doesn't
@@ -149,9 +166,16 @@ Other deliberate scoring choices to preserve (details in the README's
 limitations section): Category E only counts NParks `PLAYGROUND`/`FITNESS AREA`
 rows (the file is mostly carparks/noticeboards); Category A drops Healthier
 Dining Partner outlets that duplicate a Healthier Eatery (postal code + brand);
-Engagement Gap is amenities-per-resident in the 1.2km catchment, rank-scaled
-and independent of Category C (don't redefine it as `100 - C`, which cancels
-C's Supply contribution). After changing any of these, rebuild with
+Engagement Gap is the *shortfall* of 1.2km-catchment amenities versus the
+amount expected for that population (a log-log fit), rank-scaled — not a raw
+amenities-per-resident ratio, which is ~0.8 correlated with Reach &
+Population and made population count twice. It is independent of Category C
+(don't redefine it as `100 - C`, which cancels C's Supply contribution). A mall
+with no residents nearby gets NaN, and `scoring_formula._weighted_sum`
+re-weights over the non-NaN factors instead of scoring it 0. Categories C and
+F are proxies and start with lower default weights (10 / 5 vs the charter's
+15 / 10, kept in `CHARTER_SUPPLY_WEIGHTS`); the What-If page can drop them
+via `exclude_proxies`. After changing any of these, rebuild with
 `python etl/build_category_scores.py && python etl/build_index.py` and commit
 the refreshed `data/processed/*.csv`, since the Methodology page quotes them.
 
