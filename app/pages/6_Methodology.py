@@ -445,6 +445,10 @@ st.markdown(
   mall is only placed on a OneMap result whose building name matches the mall's name; malls with no
   such result are dropped (listed in `data/processed/registry_qa.csv`) unless a fix is supplied in
   `data/manual/geocode_overrides.csv`. A matching name is still not proof the point is right.
+- **The mall list is incomplete.** It comes from Wikipedia, which missed 14 of the 48 malls HPB
+  already designates as HPMs (they were added from HPB's list). Other malls, especially newer
+  or suburban ones, are probably missing too, and malls added from HPB's list have no landlord
+  recorded.
 - **Mall operator names are free text** from Wikipedia infoboxes (owner, else management, else
   developer). Known variants of one landlord are merged by hand in `data/manual/operator_aliases.csv`,
   but new variants will not be merged automatically.

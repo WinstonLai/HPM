@@ -382,6 +382,48 @@ def merge_duplicates(df: pd.DataFrame) -> tuple[pd.DataFrame, list[dict]]:
     return pd.DataFrame(rows), qa
 
 
+def add_existing_hpms(df: pd.DataFrame, qa: list[dict]) -> pd.DataFrame:
+    """Add every mall in data/manual/existing_hpm.csv that the Wikipedia
+    sources missed. HPB's own list is better evidence that something is a
+    mall than Wikipedia's categories (14 of the 48 existing HPMs were absent
+    from the scraped registry: Terminal 3, United Square, KINEX, ...). New
+    malls are geocoded with the same name validation as everything else; the
+    operator stays "Unknown" because there is no article to read it from."""
+    listed = _load_manual_csv("existing_hpm.csv")
+    if listed.empty:
+        return df
+    known = set()
+    for _, row in df.iterrows():
+        known.add(dedupe_key(row["name"]))
+        known.update(dedupe_key(a) for a in str(row.get("aliases") or "").split("; ") if a)
+    overrides = load_geocode_overrides()
+    new_rows = []
+    for rec in listed.itertuples(index=False):
+        display = (getattr(rec, "match_as", "") or rec.name).strip()
+        if not display or dedupe_key(rec.name) in known or dedupe_key(display) in known:
+            continue
+        geo, how = resolve_geocode(display, overrides)
+        if not geo:
+            print(f"  [reject] existing HPM could not be geocoded: {display}")
+            qa.append({"kind": "existing_hpm_not_geocoded", "name": display,
+                       "detail": "listed in existing_hpm.csv but no OneMap candidate matched; add a geocode override"})
+            continue
+        print(f"  [added existing HPM] {display} -> ({geo['lat']:.4f},{geo['lon']:.4f}) [{how}]")
+        qa.append({"kind": "existing_hpm_added", "name": display,
+                   "detail": f"missing from the Wikipedia registry; added from existing_hpm.csv ({geo.get('building')})"})
+        known.add(dedupe_key(display))
+        new_rows.append({
+            "mall_id": slugify(display), "name": clean_name(display), "aliases": "",
+            "region": "Unknown", "operator": "Unknown", "hpb_partner": 0,
+            "lat": geo["lat"], "lon": geo["lon"], "postal_code": geo.get("postal_code"),
+            "address": geo.get("address"),
+        })
+        time.sleep(0.3)
+    if not new_rows:
+        return df
+    return pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
+
+
 def apply_manual_operators(df: pd.DataFrame) -> pd.DataFrame:
     """Overlay data/manual/operators.csv (name, landlord_group, hpb_partner,
     source) onto the scraped operators. This is where HPB CIP's authoritative
@@ -468,6 +510,7 @@ def build_registry(limit: int | None = None, sleep_s: float = 0.3) -> pd.DataFra
           f"{sum(1 for q in qa if q['kind'] == 'geocode_rejected')} unverifiable geocodes.")
 
     df = apply_manual_operators(df)
+    df = add_existing_hpms(df, qa)
     # Stable, unique ids (a slug collision gets a numeric suffix).
     counts: dict[str, int] = {}
     ids = []
@@ -487,7 +530,29 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=None, help="only process first N malls (debug)")
+    parser.add_argument("--add-existing-hpms", action="store_true",
+                        help="don't re-scrape: add malls from data/manual/existing_hpm.csv that "
+                             "are missing from the current malls.csv, and exit")
     args = parser.parse_args()
+
+    if args.add_existing_hpms:
+        current = pd.read_csv(PROCESSED_DIR / "malls.csv", dtype={"postal_code": str})
+        current["aliases"] = current["aliases"].fillna("")
+        qa_new: list[dict] = []
+        updated = add_existing_hpms(current, qa_new)
+        counts: dict[str, int] = {}
+        ids = []
+        for mid in updated["mall_id"]:
+            counts[mid] = counts.get(mid, 0) + 1
+            ids.append(mid if counts[mid] == 1 else f"{mid}-{counts[mid]}")
+        updated["mall_id"] = ids
+        updated.to_csv(PROCESSED_DIR / "malls.csv", index=False)
+        qa_path = PROCESSED_DIR / "registry_qa.csv"
+        qa_old = pd.read_csv(qa_path) if qa_path.exists() else pd.DataFrame(columns=["kind", "name", "detail"])
+        qa_old = qa_old[~qa_old["kind"].isin(["existing_hpm_added", "existing_hpm_not_geocoded"])]
+        pd.concat([qa_old, pd.DataFrame(qa_new, columns=["kind", "name", "detail"])]).to_csv(qa_path, index=False)
+        print(f"\nAdded {len(updated) - len(current)} malls; registry now has {len(updated)}.")
+        raise SystemExit(0)
 
     df = build_registry(limit=args.limit)
     out_path = PROCESSED_DIR / "malls.csv"

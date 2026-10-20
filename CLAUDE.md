@@ -173,7 +173,11 @@ on-site amenities (dining, gyms, clinics, bike racks) are assigned to their
 *nearest* mall only (`count_nearby(exclusive=True)`); MRT access is counted per
 *station* with distance decay, not per exit; Reach & Population is a
 distance-weighted catchment of residents, seniors and workers (the Engagement
-Gap keeps the hard 1.2km circle to match its amenity counts); Category A drops Healthier
+Gap keeps the hard 1.2km circle to match its amenity counts); the 48 existing
+HPMs in `data/manual/existing_hpm.csv` drive both `is_existing_hpm` and
+`add_existing_hpms`, which adds any listed mall the Wikipedia registry lacks
+(14 were missing) — run `python etl/build_mall_registry.py --add-existing-hpms`
+after editing that file, instead of a full re-scrape; Category A drops Healthier
 Dining Partner outlets that duplicate a Healthier Eatery (postal code + brand);
 Engagement Gap is the *shortfall* of 1.2km-catchment amenities versus the
 amount expected for that population (a log-log fit), rank-scaled — not a raw

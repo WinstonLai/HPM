@@ -149,3 +149,38 @@ else:
         hide_index=True, use_container_width=True,
     )
     st.caption("An AUC well above 0.5 supports the index; near 0.5 means it does not recognise HPB's existing choices.")
+
+    st.subheader("Which components recognise existing HPMs?")
+    auc = scoring.component_auc(df)
+    labels = {"hpm_index": "HPM Index", "supply_score": "Supply Readiness", "demand_score": "Demand Opportunity",
+              **scoring.CATEGORY_LABELS}
+    auc_table = pd.DataFrame({"Component": [labels[c] for c in auc.index], "AUC": auc.values})
+    bar = px.bar(auc_table, x="AUC", y="Component", orientation="h", range_x=[0.3, 1.0])
+    bar.add_vline(x=0.5, line_dash="dash", line_color="gray", annotation_text="chance")
+    bar.update_yaxes(autorange="reversed")
+    bar.update_layout(height=420, margin=dict(l=0, r=0, t=10, b=0))
+    st.plotly_chart(bar, use_container_width=True)
+    st.caption(
+        "**Read with care.** This asks whether the index *resembles* HPB's existing choices, not whether it "
+        "predicts readiness. Healthy Dining is built from HPB's own Healthier Dining datasets, so malls that "
+        "are already HPMs likely score well on it partly because they already take part in those programmes. "
+        "Components near 0.5 (such as Accessibility or Physical Activity) do not distinguish existing HPMs "
+        "from other malls."
+    )
+
+st.header("4. Candidate malls: highest-ranked, not yet an HPM")
+n_show = st.slider("Show the top", 5, 40, 15)
+candidates = df[df["is_existing_hpm"] == 0].sort_values("rank").head(n_show)
+st.dataframe(
+    candidates[["rank", "name", "region", "operator", "hpm_index", "supply_score", "demand_score", "quadrant"]]
+    .rename(columns={"rank": "Rank", "name": "Mall", "region": "Region", "operator": "Operator",
+                     "hpm_index": "HPM Index", "supply_score": "Supply", "demand_score": "Demand",
+                     "quadrant": "Quadrant"})
+    .style.format({"HPM Index": "{:.1f}", "Supply": "{:.1f}", "Demand": "{:.1f}"}),
+    hide_index=True, use_container_width=True,
+)
+st.caption(
+    "A starting shortlist for HPB engagement: malls the index ranks highest that are not on the existing-HPM "
+    "list. Rank is out of all malls, including existing HPMs." if has_hpm_list else
+    "Load the existing-HPM list (Section 3) to exclude malls HPB has already reached."
+)

@@ -262,6 +262,24 @@ def scenario_comparison(category_scores: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def component_auc(index_df: pd.DataFrame) -> pd.Series:
+    """AUC of each score column at separating existing HPMs from other malls
+    (0.5 = no better than chance). Shows WHICH components make the index
+    resemble HPB's existing choices. Read with care: Healthy Dining is built
+    from HPB's own Healthier Dining datasets, so existing HPMs scoring well on
+    it is partly circular (designated malls likely already take part in those
+    programmes) rather than evidence of predictive power."""
+    flag = index_df["is_existing_hpm"].fillna(0).astype(int) == 1
+    n1, n0 = int(flag.sum()), int((~flag).sum())
+    cols = ["hpm_index", "supply_score", "demand_score", *CATEGORY_LABELS]
+    out = {}
+    for col in cols:
+        if col in index_df.columns and n1 and n0:
+            ranks = index_df[col].rank()
+            out[col] = float((ranks[flag].sum() - n1 * (n1 + 1) / 2) / (n1 * n0))
+    return pd.Series(out)
+
+
 def hpm_backtest(index_df: pd.DataFrame) -> dict | None:
     """Do HPB's existing Health Promoting Malls rank higher than the rest?
     Needs `is_existing_hpm` (from data/manual/existing_hpm.csv). Returns None

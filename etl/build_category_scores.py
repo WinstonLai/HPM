@@ -494,15 +494,25 @@ def name_key(name: str) -> str:
 
 def flag_existing_hpm(malls: pd.DataFrame) -> pd.Series:
     """1 for malls listed in data/manual/existing_hpm.csv (columns: name,
-    source) -- HPB's existing Health Promoting Malls. The file is supplied by
-    HPB CIP; with none, every mall is 0 and the dashboard says the index
-    cannot be validated. Matched on name or any alias."""
+    source, optional match_as) -- HPB's existing Health Promoting Malls. The
+    file is supplied by HPB CIP; with none, every mall is 0 and the dashboard
+    says the index cannot be validated. Matched on name or any alias. The
+    registry build adds any listed mall it does not already have
+    (build_mall_registry.add_existing_hpms), so every entry should match."""
     flags = pd.Series(0, index=malls.index)
     path = MANUAL_DIR / "existing_hpm.csv"
     if not path.exists():
         return flags
     listed = pd.read_csv(path, dtype=str).fillna("")
-    wanted = {name_key(n): n for n in listed.get("name", []) if n.strip()}
+    wanted: dict[str, str] = {}
+    for rec in listed.itertuples(index=False):
+        if not rec.name.strip():
+            continue
+        # `match_as` is the spelling used in the registry when it differs
+        # from the one HPB uses ("Singpost Centre" -> "SingPost").
+        for spelling in (rec.name, getattr(rec, "match_as", "")):
+            if spelling.strip():
+                wanted[name_key(spelling)] = rec.name
     if not wanted:
         return flags
     aliases = malls["aliases"].fillna("") if "aliases" in malls.columns else pd.Series("", index=malls.index)
@@ -513,9 +523,10 @@ def flag_existing_hpm(malls: pd.DataFrame) -> pd.Series:
         if hit:
             flags[idx] = 1
             found |= hit
-    for k, n in wanted.items():
-        if k not in found:
-            print(f"  [warn] existing_hpm.csv: '{n}' does not match any mall in the registry")
+    unmatched = sorted({n for k, n in wanted.items() if k not in found} -
+                       {n for k, n in wanted.items() if k in found})
+    for n in unmatched:
+        print(f"  [warn] existing_hpm.csv: '{n}' does not match any mall in the registry")
     return flags
 
 

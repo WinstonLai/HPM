@@ -189,11 +189,22 @@ Exact dataset IDs are in `etl/build_amenities.py`.
   more healthier outlets than OSM maps F&B outlets at all) and it tracks the
   raw count closely (rank correlation ~0.8). A real tenant directory would
   make it usable.
-- **Existing HPMs**: `data/manual/existing_hpm.csv` (`name,source`) is for the
-  list of malls HPB has already designated. With it, the build sets
-  `is_existing_hpm` and the Regional Priorities page backtests the index
-  (median rank, Top 20/50 hits, AUC). The file ships empty because the list
-  is not public.
+- **Existing HPMs**: `data/manual/existing_hpm.csv` (`name,source,match_as`)
+  holds the 48 malls HPB CIP lists as existing Health Promoting Malls
+  (`match_as` is the registry spelling where HPB's differs, e.g. "Singpost
+  Centre" → "SingPost"). The build sets `is_existing_hpm` from it, and the
+  Regional Priorities page backtests the index. **14 of the 48 were missing
+  from the Wikipedia-scraped registry** (Terminal 3, United Square, KINEX,
+  Paya Lebar Quarter, ...), plus Velocity @ Novena Square, so the registry
+  build now adds any listed mall it lacks
+  (`build_mall_registry.add_existing_hpms`; `--add-existing-hpms` does just
+  that without re-scraping). The same gap probably affects malls that are
+  not on the list, so the registry should be treated as incomplete.
+  Result at the time of writing: AUC 0.73 (0.5 = chance); 13 of 48 existing
+  HPMs rank in the Top 20 and 25 in the Top 50 of 188. Healthy Dining
+  separates them best (0.77) but is partly circular, since it is built from
+  HPB's own Healthier Dining datasets; Accessibility (0.48) and Physical
+  Activity (0.52) do not separate them at all.
 - **Robustness**: `scoring_formula.rank_stability` re-ranks the malls under 500
   random weightings, and `scenario_comparison` compares other readings of
   the charter's ambiguous weights (its category weights sum to 90 + Demand
