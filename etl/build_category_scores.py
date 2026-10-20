@@ -35,8 +35,10 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from datagovsg import RAW_DIR, feature_attributes, feature_point, load_geojson_features  # noqa: E402
-from geo import haversine_m, min_max_normalize, polygon_centroid  # noqa: E402
+from geo import WINSOR_QUANTILE, haversine_m, min_max_normalize, polygon_centroid  # noqa: E402
 from onemap import name_tokens  # noqa: E402
+import provenance  # noqa: E402
+import validate  # noqa: E402
 
 PROCESSED_DIR = Path(__file__).resolve().parent.parent / "data" / "processed"
 PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
@@ -591,6 +593,28 @@ def compute_category_f(malls: pd.DataFrame) -> pd.Series:
     return (chain_score * 0.8 + bonus).clip(upper=100)
 
 
+def record_provenance(malls: pd.DataFrame) -> None:
+    """Write what went into this build to data/processed/_meta.json."""
+    qa_path = PROCESSED_DIR / "registry_qa.csv"
+    qa_counts = pd.read_csv(qa_path)["kind"].value_counts().to_dict() if qa_path.exists() else {}
+    provenance.update_meta("registry", {
+        "n_malls": int(len(malls)),
+        "types": malls["type"].value_counts().to_dict() if "type" in malls.columns else {},
+        "qa_events": qa_counts,
+    })
+    provenance.update_meta("category_scores", {
+        "n_malls": int(len(malls)),
+        "parameters": {
+            "on_site_radius_m": ON_SITE_RADIUS_M, "nearby_radius_m": NEARBY_RADIUS_M,
+            "catchment_radius_m": CATCHMENT_RADIUS_M, "bus_radius_m": BUS_RADIUS_M,
+            "reach_kernel_radius_m": REACH_KERNEL_RADIUS_M, "name_match_max_m": NAME_MATCH_MAX_M,
+            "osm_dedupe_m": OSM_DEDUPE_M, "winsor_quantile": WINSOR_QUANTILE,
+            "park_facility_classes": sorted(PARK_FACILITY_CLASSES),
+        },
+    })
+    provenance.update_meta("raw_data", provenance.raw_inventory())
+
+
 def write_matching_qa() -> None:
     """Report name-equality matches that were rejected for being too far from
     the mall. Each row is a mall whose own building (by name) sits well away
@@ -610,8 +634,10 @@ def build_category_scores() -> pd.DataFrame:
     malls = pd.read_csv(malls_path, dtype={"postal_code": str})
     print(f"Loaded {len(malls)} malls from {malls_path}")
     FAR_NAME_MATCHES.clear()
+    validate.enforce("registry", *validate.validate_registry(malls))
 
     out = malls[["mall_id", "name", "region", "operator", "lat", "lon"]].copy()
+    out.insert(2, "type", malls["type"] if "type" in malls.columns else "Shopping mall")
     out["operator_known"] = (malls["operator"] != "Unknown").astype(int)
 
     print("Assigning authoritative region (nearest URA subzone) ...")
@@ -741,9 +767,11 @@ def build_category_scores() -> pd.DataFrame:
     out["engagement_gap_score"] = gap
 
     write_matching_qa()
+    validate.enforce("scores", *validate.validate_scores(out, len(malls)))
 
     out_path = PROCESSED_DIR / "category_scores.csv"
     out.to_csv(out_path, index=False)
+    record_provenance(malls)
     print(f"\nWrote {len(out)} malls x category scores to {out_path}")
     return out
 

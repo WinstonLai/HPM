@@ -37,6 +37,9 @@ def main() -> None:
         print(f"Wrote {len(df)} malls to {malls_path}")
     else:
         print(f"=== Step 1/4: mall registry (cached: {malls_path}) ===")
+        if args.limit:
+            print(f"  [warn] --limit {args.limit} is ignored because the registry is cached; "
+                  "combine it with --force to rebuild a limited registry")
 
     print("\n=== Step 2/4: download amenity/context datasets ===")
     build_amenities.download_all(force=args.force)

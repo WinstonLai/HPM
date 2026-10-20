@@ -50,6 +50,7 @@ import requests
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from geo import haversine_m  # noqa: E402
 from onemap import geocode_candidates, geocode_validated, name_tokens  # noqa: E402
+import validate  # noqa: E402
 
 WIKI_API = "https://en.wikipedia.org/w/api.php"
 LIST_PAGE = "List_of_shopping_malls_in_Singapore"
@@ -165,7 +166,7 @@ def scrape_regional_list() -> list[dict]:
             continue
         for page_title, display in WIKI_LINK_RE.findall(body):
             name = (display or page_title).strip()
-            rows.append({"page_title": page_title.strip(), "name": name, "region": region})
+            rows.append({"page_title": page_title.strip(), "name": name, "region": region, "source": "regional"})
     return rows
 
 
@@ -190,7 +191,7 @@ def scrape_category_members() -> list[dict]:
         # as "Template:Shopping malls in Singapore".
         if title.lower().startswith("list of") or ":" in title:
             continue
-        rows.append({"page_title": title, "name": title, "region": "Unknown"})
+        rows.append({"page_title": title, "name": title, "region": "Unknown", "source": "category"})
     return rows
 
 
@@ -213,7 +214,7 @@ def scrape_commercial_estates() -> list[dict]:
             else:
                 name = (display or page_title).strip()
                 page_title = page_title.strip()
-            rows.append({"page_title": page_title, "name": name, "region": "Unknown"})
+            rows.append({"page_title": page_title, "name": name, "region": "Unknown", "source": "estate"})
     return rows
 
 
@@ -323,8 +324,8 @@ def merge_duplicates(df: pd.DataFrame) -> tuple[pd.DataFrame, list[dict]]:
     """Collapse records that describe the same mall, using the geocoded
     position. Two records are the same mall when they share a canonical
     Wikipedia article, or share a postal code within SAME_BUILDING_MAX_M, or
-    sit within NEAR_DUPLICATE_MAX_M with a shared distinctive name word and
-    at least one missing postal code. Records with different postal codes
+    sit within NEAR_DUPLICATE_MAX_M with one name's distinctive words contained
+    in the other's and at least one missing postal code. Records with different postal codes
     are never merged on proximity alone (adjacent malls such as Bugis
     Junction / Bugis+ stay separate)."""
     n = len(df)
@@ -338,7 +339,9 @@ def merge_duplicates(df: pd.DataFrame) -> tuple[pd.DataFrame, list[dict]]:
 
     reasons: dict[tuple[int, int], str] = {}
     lat, lon = df["lat"].to_numpy(float), df["lon"].to_numpy(float)
-    postal = df["postal_code"].tolist()
+    # A column mixing postal strings and missing values holds NaN (which is
+    # truthy!) for the missing ones, so normalise "missing" to None explicitly.
+    postal = [p if isinstance(p, str) and p.strip() else None for p in df["postal_code"].tolist()]
     canon = df["canonical_title"].tolist()
     tokens = [_distinctive_tokens(nm) for nm in df["name"]]
     for i in range(n):
@@ -349,8 +352,11 @@ def merge_duplicates(df: pd.DataFrame) -> tuple[pd.DataFrame, list[dict]]:
                 reason = "same Wikipedia article"
             elif postal[i] and postal[i] == postal[j] and dist[j] <= SAME_BUILDING_MAX_M:
                 reason = f"same postal code {postal[i]}"
-            elif dist[j] <= NEAR_DUPLICATE_MAX_M and not (postal[i] and postal[j]) and tokens[i] & tokens[j]:
-                reason = f"{dist[j]:.0f}m apart, shared name word"
+            elif (dist[j] <= NEAR_DUPLICATE_MAX_M and not (postal[i] and postal[j]) and tokens[i] and tokens[j]
+                  and (tokens[i] <= tokens[j] or tokens[j] <= tokens[i])):
+                # One name's distinctive words contain the other's ("The Star" / "The Star Vista").
+                # Merely sharing a place word ("Orchard Central" / "Orchard Gateway") is not enough.
+                reason = f"{dist[j]:.0f}m apart, one name contains the other"
             if reason:
                 reasons[(i, j)] = reason
                 parent[find(j)] = find(i)
@@ -363,9 +369,14 @@ def merge_duplicates(df: pd.DataFrame) -> tuple[pd.DataFrame, list[dict]]:
     for members in groups.values():
         members.sort()  # source order: earlier = region-organised list wins
         rep = df.iloc[members[0]].to_dict()
+        # Aliases already recorded on any member are kept, plus the merged names.
+        known_aliases = [a for v in (df["aliases"].iloc[members] if "aliases" in df.columns else [])
+                         for a in str(v if isinstance(v, str) else "").split("; ") if a]
+        if "hpb_partner" in df.columns:
+            rep["hpb_partner"] = int(df["hpb_partner"].iloc[members].fillna(0).astype(int).max())
         if len(members) > 1:
             others = df.iloc[members[1:]]
-            rep["aliases"] = "; ".join(others["name"])
+            rep["aliases"] = "; ".join(dict.fromkeys(known_aliases + others["name"].tolist()))
             for col in ("operator", "region", "postal_code", "address"):
                 if rep.get(col) in (None, "", "Unknown") or (isinstance(rep.get(col), float) and np.isnan(rep[col])):
                     for v in df.iloc[members][col]:
@@ -377,7 +388,7 @@ def merge_duplicates(df: pd.DataFrame) -> tuple[pd.DataFrame, list[dict]]:
                 qa.append({"kind": "merged", "name": df.iloc[other]["name"],
                            "detail": f"merged into '{rep['name']}' ({why})"})
         else:
-            rep["aliases"] = ""
+            rep["aliases"] = "; ".join(dict.fromkeys(known_aliases))
         rows.append(rep)
     return pd.DataFrame(rows), qa
 
@@ -413,7 +424,7 @@ def add_existing_hpms(df: pd.DataFrame, qa: list[dict]) -> pd.DataFrame:
                    "detail": f"missing from the Wikipedia registry; added from existing_hpm.csv ({geo.get('building')})"})
         known.add(dedupe_key(display))
         new_rows.append({
-            "mall_id": slugify(display), "name": clean_name(display), "aliases": "",
+            "mall_id": slugify(display), "name": clean_name(display), "aliases": "", "source": "existing_hpm",
             "region": "Unknown", "operator": "Unknown", "hpb_partner": 0,
             "lat": geo["lat"], "lon": geo["lon"], "postal_code": geo.get("postal_code"),
             "address": geo.get("address"),
@@ -422,6 +433,51 @@ def add_existing_hpms(df: pd.DataFrame, qa: list[dict]) -> pd.DataFrame:
     if not new_rows:
         return df
     return pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
+
+
+MALL_TYPES = ["Shopping mall", "Neighbourhood centre", "Market / hawker centre", "Area / precinct"]
+MARKET_RE = re.compile(r"\b(hawker|market|food centre|food center|food court)\b", re.IGNORECASE)
+AREA_RE = re.compile(r"\b(town centre|town center|regional centre|regional center)\b", re.IGNORECASE)
+
+
+def load_manual_types() -> dict[str, str]:
+    """Hand-curated types from data/manual/mall_types.csv (name,type,note),
+    keyed by dedupe_key(name). These beat the rules below."""
+    df = _load_manual_csv("mall_types.csv")
+    if df.empty:
+        return {}
+    bad = sorted(set(df["type"]) - set(MALL_TYPES))
+    if bad:
+        print(f"  [warn] mall_types.csv has unknown types {bad}; allowed: {MALL_TYPES}")
+    return {dedupe_key(r.name): r.type for r in df.itertuples(index=False) if r.type in MALL_TYPES}
+
+
+def classify_type(name: str, source: str, manual: dict[str, str]) -> str:
+    """Best-effort type, so non-malls can be filtered out of a mall ranking.
+    Order: hand-curated override; HPB-designated (always a mall); market /
+    hawker keywords; "Town/Regional Centre" (an HDB town node, not a
+    building); a mall that only appears in the "Housing estate commercial
+    areas" list (a neighbourhood centre); otherwise a shopping mall. The
+    rules are heuristics -- correct any miss in data/manual/mall_types.csv."""
+    key = dedupe_key(name)
+    if key in manual:
+        return manual[key]
+    if source == "existing_hpm":
+        return "Shopping mall"
+    if MARKET_RE.search(name):
+        return "Market / hawker centre"
+    if AREA_RE.search(name):
+        return "Area / precinct"
+    if source == "estate":
+        return "Neighbourhood centre"
+    return "Shopping mall"
+
+
+def apply_types(df: pd.DataFrame) -> pd.DataFrame:
+    manual = load_manual_types()
+    df = df.copy()
+    df["type"] = [classify_type(n, str(s), manual) for n, s in zip(df["name"], df.get("source", "category"))]
+    return df
 
 
 def apply_manual_operators(df: pd.DataFrame) -> pd.DataFrame:
@@ -498,6 +554,7 @@ def build_registry(limit: int | None = None, sleep_s: float = 0.3) -> pd.DataFra
                 "postal_code": geo.get("postal_code"),
                 "address": geo.get("address"),
                 "canonical_title": canonical if wikitext else "",
+                "source": row["source"],
             }
         )
         print(f"  [{idx + 1}/{total}] {name} -> operator={operator!r} "
@@ -511,6 +568,7 @@ def build_registry(limit: int | None = None, sleep_s: float = 0.3) -> pd.DataFra
 
     df = apply_manual_operators(df)
     df = add_existing_hpms(df, qa)
+    df = apply_types(df)
     # Stable, unique ids (a slug collision gets a numeric suffix).
     counts: dict[str, int] = {}
     ids = []
@@ -520,8 +578,9 @@ def build_registry(limit: int | None = None, sleep_s: float = 0.3) -> pd.DataFra
     df["mall_id"] = ids
     df["postal_code"] = df["postal_code"].astype("string")
 
+    validate.enforce("registry", *validate.validate_registry(df))
     pd.DataFrame(qa, columns=["kind", "name", "detail"]).to_csv(PROCESSED_DIR / "registry_qa.csv", index=False)
-    return df[["mall_id", "name", "aliases", "region", "operator", "hpb_partner",
+    return df[["mall_id", "name", "aliases", "type", "region", "operator", "hpb_partner",
                "lat", "lon", "postal_code", "address"]].reset_index(drop=True)
 
 
@@ -530,16 +589,67 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=None, help="only process first N malls (debug)")
+    parser.add_argument("--dedupe", action="store_true",
+                        help="don't re-geocode: merge duplicate malls in the current malls.csv "
+                             "(same postal code, or nearly the same spot with one name containing the other)")
+    parser.add_argument("--refresh-types", action="store_true",
+                        help="don't re-geocode: recompute the `type` column of the current malls.csv "
+                             "(re-reads the three Wikipedia lists to see where each mall came from)")
     parser.add_argument("--add-existing-hpms", action="store_true",
                         help="don't re-scrape: add malls from data/manual/existing_hpm.csv that "
                              "are missing from the current malls.csv, and exit")
     args = parser.parse_args()
 
+    if args.dedupe:
+        current = pd.read_csv(PROCESSED_DIR / "malls.csv", dtype={"postal_code": str})
+        current["aliases"] = current["aliases"].fillna("")
+        current["canonical_title"] = ""
+        merged, qa_new = merge_duplicates(current)
+        merged = merged.drop(columns=["canonical_title"])
+        merged["postal_code"] = merged["postal_code"].astype("string")
+        merged.to_csv(PROCESSED_DIR / "malls.csv", index=False)
+        qa_path = PROCESSED_DIR / "registry_qa.csv"
+        qa_old = pd.read_csv(qa_path) if qa_path.exists() else pd.DataFrame(columns=["kind", "name", "detail"])
+        pd.concat([qa_old, pd.DataFrame(qa_new, columns=["kind", "name", "detail"])]).to_csv(qa_path, index=False)
+        for q in qa_new:
+            print(f"  merged {q['name']}: {q['detail']}")
+        print(f"\n{len(current)} -> {len(merged)} malls")
+        raise SystemExit(0)
+
+    if args.refresh_types:
+        current = pd.read_csv(PROCESSED_DIR / "malls.csv", dtype={"postal_code": str})
+        current["aliases"] = current["aliases"].fillna("")
+        origin: dict[str, str] = {}
+        for rec in scrape_mall_list().itertuples():
+            for k in (dedupe_key(rec.page_title), dedupe_key(rec.name)):
+                origin.setdefault(k, rec.source)
+        hpm = _load_manual_csv("existing_hpm.csv")
+        hpm_keys = {dedupe_key(n) for col in ("name", "match_as") if col in hpm for n in hpm[col] if n}
+
+        def source_of(row) -> str:
+            keys = [dedupe_key(row["name"])] + [dedupe_key(a) for a in str(row["aliases"]).split("; ") if a]
+            if any(k in hpm_keys for k in keys):
+                return "existing_hpm"
+            return next((origin[k] for k in keys if k in origin), "category")
+
+        current["source"] = current.apply(source_of, axis=1)
+        current = apply_types(current).drop(columns=["source"])
+        cols = ["mall_id", "name", "aliases", "type"] + [c for c in current.columns
+                                                         if c not in ("mall_id", "name", "aliases", "type")]
+        current[cols].to_csv(PROCESSED_DIR / "malls.csv", index=False)
+        print(current["type"].value_counts().to_string())
+        raise SystemExit(0)
+
     if args.add_existing_hpms:
         current = pd.read_csv(PROCESSED_DIR / "malls.csv", dtype={"postal_code": str})
         current["aliases"] = current["aliases"].fillna("")
         qa_new: list[dict] = []
+        if "type" in current.columns:
+            current["source"] = current["type"].map(lambda t: "estate" if t == "Neighbourhood centre" else "category")
         updated = add_existing_hpms(current, qa_new)
+        if "type" in updated.columns:
+            updated["type"] = updated["type"].fillna("Shopping mall")
+        updated = updated.drop(columns=["source"], errors="ignore")
         counts: dict[str, int] = {}
         ids = []
         for mid in updated["mall_id"]:

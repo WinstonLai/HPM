@@ -116,6 +116,16 @@ _NOISE_TOKENS = {"the", "singapore"}
 _GENERIC_TOKENS = {"mall", "centre", "center", "shopping", "plaza", "complex", "building", "town"}
 
 
+# Words that mean the building is something other than a mall that merely shares
+# its name ("WHITE SANDS PRIMARY SCHOOL", "... TOWN COUNCIL (SERVICE CENTRE)").
+_NOT_A_MALL = {
+    "school", "primary", "secondary", "college", "university", "institute", "academy", "kindergarten",
+    "preschool", "childcare", "nursery", "tuition", "hospital", "clinic", "polyclinic", "dental", "medical",
+    "surgery", "church", "temple", "mosque", "mrt", "lrt", "station", "exit", "carpark", "council",
+    "police", "cemetery", "pte", "ltd",
+}
+
+
 def name_tokens(name: str) -> list[str]:
     toks = _NON_ALNUM_RE.sub(" ", (name or "").lower()).split()
     return [_NUMBER_WORDS.get(t, t) for t in toks if t not in _NOISE_TOKENS]
@@ -135,8 +145,8 @@ def _contains_phrase(haystack: list[str], needle: list[str]) -> Optional[int]:
 def match_score(mall_name: str, candidate: dict) -> int:
     """How well a OneMap candidate's BUILDING text matches the mall name.
     3 = same words (optionally ignoring "shopping"); 2 = the mall's full name
-    appears as a phrase in the building text (a tenant inside the mall
-    geocodes to the mall); 1 = same distinctive words once generic suffixes
+    ends the building text (a tenant inside the mall geocodes to the mall) or
+    starts it with a harmless qualifier ("GREAT WORLD CITY"); 1 = same distinctive words once generic suffixes
     ("Centre"/"Plaza"/...) are dropped, requiring 2+ distinctive words;
     0 = no match."""
     want = name_tokens(mall_name)
@@ -148,15 +158,25 @@ def match_score(mall_name: str, candidate: dict) -> int:
     strip = lambda toks: [t for t in toks if t != "shopping"]  # noqa: E731
     if strip(want) == strip(have):
         return 3
+    # The mall's name inside the building text. Either it ENDS the text -- a
+    # tenant ("GOLDEN VILLAGE (GV SUNTEC CITY)", "VELOCITY @ NOVENA SQUARE") --
+    # or it STARTS it with a qualifier after ("GREAT WORLD CITY", "ZHUJIAO
+    # CENTRE (TEKKA MARKET)", "NORTHSHORE PLAZA I"). A qualifier that names an
+    # institution ("WHITE SANDS PRIMARY SCHOOL") is a different building that
+    # shares a word, often over a kilometre away, so it is rejected.
     pos = _contains_phrase(have, want)
-    if pos is not None and (len(want) >= 2 or pos == 0):
-        return 2
+    if pos is not None:
+        ends = pos + len(want) == len(have)
+        starts = pos == 0
+        rest = set(have[:pos] + have[pos + len(want):])
+        if ends or (starts and not rest & _NOT_A_MALL):
+            return 2
     # Loosest tier: ignore only *trailing* generic words, so "Cheng San
     # Centre" ~ "Cheng San Shopping Centre" but "Tampines 1" does not match
     # "Tampines Plaza 1" and "Hougang Town Centre" does not match a town
     # council office.
     want_core, have_core = _strip_trailing_generic(strip(want)), _strip_trailing_generic(strip(have))
-    if len(want_core) >= 2 and _contains_phrase(have_core, want_core) is not None:
+    if len(want_core) >= 2 and want_core == have_core:
         return 1
     return 0
 

@@ -23,6 +23,9 @@ python etl/run_all.py
 
 # 2. Launch the dashboard
 streamlit run app/Home.py
+
+# 3. (optional) Run the tests
+pip install -r requirements-dev.txt && pytest
 ```
 
 Processed data lives in `data/processed/*.csv` and is checked into the repo,
@@ -33,11 +36,11 @@ ETL is fast after the first pass.
 ## Pages
 
 1. **Home** — executive summary: total malls assessed, average index, Top 10, top landlords.
-2. **National Ranking** — full ranked table, filterable by region / operator / tier.
-3. **What-If Simulator** — sliders for every category weight and the overall Supply/Demand split; ranking, tiers, and Top 10/20/50 shortlists recompute instantly.
-4. **Mall Comparison** — radar chart + strengths/weaknesses for up to 5 malls.
-5. **National Map** — mall locations coloured by score, with a shortlist toggle.
-6. **Strategic Matrix** — 2×2 Readiness × Demand quadrant view (Pioneer HPM / Quick Wins / Strategic Investment / Future Monitoring), the charter's proposed enhancement over a flat ranking.
+2. **National Ranking** — full ranked table with name search, filters (region / type / operator / tier / hide existing HPMs), in-cell score bars, optional category columns, and CSV download.
+3. **What-If Simulator** — sliders for every category weight, the overall Supply/Demand split, a proxy-category switch and the tier cut-offs; ranking, tiers and Top 10/20/50 shortlists recompute instantly, show movement against the default rank, export to CSV, and come with a rank-stability check. Your settings apply to every other page until reset.
+4. **Mall Comparison** — radar chart (with the all-mall median) and strengths/weaknesses for up to 5 malls, judged by percentile against all malls, plus the raw numbers behind each score.
+5. **National Map** — mall locations on a colour-blind-safe scale with a legend, formatted tooltips, a shortlist toggle, existing-HPM rings and a zoom-to-mall selector.
+6. **Strategic Matrix** — 2×2 Readiness × Demand quadrant view (Pioneer HPM / Quick Wins / Strategic Investment / Future Monitoring), the charter's proposed enhancement over a flat ranking, with shaded and labelled quadrants, top-N labels, population-sized dots, and median or fixed cut-offs.
 7. **Methodology** — plain-language explanation of the data sources, why raw counts are normalised, and the category weights, with an interactive worked example that recomputes any selected mall's actual score step by step (Supply contributions → Demand contributions → final index), a "what this score doesn't capture" section, and a robustness section (alternative readings of the charter's weights, rank stability under random re-weighting, nominal vs effective weights).
 8. **Regional Priorities** — high-demand malls by region or planning area that HPB has not yet reached, chain-vs-independent landlord comparison, and a backtest of the index against HPB's existing Health Promoting Malls (once `data/manual/existing_hpm.csv` is supplied).
 
@@ -201,7 +204,7 @@ Exact dataset IDs are in `etl/build_amenities.py`.
   that without re-scraping). The same gap probably affects malls that are
   not on the list, so the registry should be treated as incomplete.
   Result at the time of writing: AUC 0.73 (0.5 = chance); 13 of 48 existing
-  HPMs rank in the Top 20 and 25 in the Top 50 of 188. Healthy Dining
+  HPMs rank in the Top 20 and 25 in the Top 50 of ~190. Healthy Dining
   separates them best (0.77) but is partly circular, since it is built from
   HPB's own Healthier Dining datasets; Accessibility (0.48) and Physical
   Activity (0.52) do not separate them at all.
@@ -221,9 +224,20 @@ Exact dataset IDs are in `etl/build_amenities.py`.
   earlier build found just 24: Wikipedia fetches that failed under load were
   silently treated as "no infobox". They now retry, and a persistent failure
   is recorded in `registry_qa.csv`.)
-- **Tiers and quadrants** are relative: tiers are quartiles of the rank
-  (top quarter = Platinum … bottom quarter = Bronze); quadrants split Supply
-  and Demand at their medians.
+- **Tiers and quadrants** are labels within this list, not certifications.
+  Tiers use fixed cut-offs on the HPM Index (Platinum ≥ 50, Gold ≥ 35, Silver ≥
+  20, else Bronze; `TIER_THRESHOLDS` in `scoring_formula.py`), so the number of
+  malls per tier changes with the weights; the cut-offs are a judgement call
+  and the What-If Simulator can move them. (Earlier versions used rank
+  quartiles, which made "malls in Gold/Platinum" a constant ~50%.) Quadrants
+  split Supply and Demand at their medians by default, which always puts about
+  half of malls on each side; the Strategic Matrix page can use fixed cut-offs.
+- **Mall `type`**: each registry row is tagged Shopping mall / Neighbourhood
+  centre / Market / hawker centre / Area / precinct, by rule (a mall found only
+  in Wikipedia's "Housing estate commercial areas" list is a neighbourhood
+  centre; "Town Centre" names are areas; market keywords) with hand-curated
+  overrides in `data/manual/mall_types.csv`. It is a heuristic; the ranking
+  page can filter on it. HPB-designated malls are always "Shopping mall".
 - **Engagement Gap** ("untapped demand"): health-promoting amenities
   (healthier eateries, gyms/sport facilities, CHAS clinics) within 1.2km,
   compared with the number a catchment of that population would typically
@@ -261,13 +275,17 @@ etl/                ETL pipeline (run_all.py orchestrates everything)
   build_amenities.py       downloads all raw datasets -> data/raw/
   build_category_scores.py joins + normalises -> category_scores.csv
   build_index.py           applies default weights -> hpm_index.csv
+  validate.py        sanity checks run inside the ETL (bounding box, duplicates, postal codes, score ranges)
+  provenance.py      writes data/processed/_meta.json (build time, parameters, raw-file hashes)
+tests/               pytest suite for the ETL logic (pip install -r requirements-dev.txt; pytest)
 app/                 Streamlit dashboard
   Home.py            Page 1 - Executive Summary
-  lib/                shared data loading + scoring helpers
+  lib/                data loading, scoring wrapper, and weights.py (custom weights shared across pages)
   pages/              Pages 2-8
 data/
   raw/               cached raw downloads (gitignored)
-  manual/            hand-maintained inputs: geocode_overrides.csv, operator_aliases.csv, operators.csv
+  manual/            hand-maintained inputs: geocode_overrides.csv, operator_aliases.csv, operators.csv,
+                     existing_hpm.csv, mall_types.csv
   processed/         malls.csv, category_scores.csv, hpm_index.csv, plus registry_qa.csv /
-                     matching_qa.csv audit trails (committed)
+                     matching_qa.csv audit trails and _meta.json provenance (committed)
 ```

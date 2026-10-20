@@ -14,6 +14,7 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 import data_loader  # noqa: E402
 import scoring  # noqa: E402
+import weights  # noqa: E402
 
 st.set_page_config(page_title="HPM Readiness Dashboard", page_icon="🛍️", layout="wide")
 
@@ -30,13 +31,22 @@ if not data_loader.data_available():
     )
     st.stop()
 
-df = data_loader.load_default_index()
+df, is_custom = weights.load_index()
+weights.show_banner("home")
 
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Total malls assessed", len(df))
 col2.metric("Average HPM Index", f"{df['hpm_index'].mean():.1f} / 100")
-col3.metric("Malls in Gold/Platinum tier", int(df["tier"].isin(["Gold", "Platinum"]).sum()))
-col4.metric("Regions covered", df["region"].nunique())
+col3.metric("Malls in Gold/Platinum tier", int(df["tier"].isin(["Gold", "Platinum"]).sum()),
+            help=f"Tiers use fixed cut-offs (Platinum ≥ {scoring.TIER_THRESHOLDS['Platinum']:.0f}, "
+                 f"Gold ≥ {scoring.TIER_THRESHOLDS['Gold']:.0f}, Silver ≥ {scoring.TIER_THRESHOLDS['Silver']:.0f}), "
+                 "so this count moves when the weights or mall list change.")
+if "is_existing_hpm" in df.columns and int(df["is_existing_hpm"].sum()) > 0:
+    n_top = int(df.loc[df["rank"] <= 20, "is_existing_hpm"].sum())
+    col4.metric("Existing HPMs in the Top 20", f"{n_top} of 20",
+                help="How many of the 20 highest-ranked malls HPB has already designated as HPMs.")
+else:
+    col4.metric("Regions covered", df["region"].nunique())
 
 st.divider()
 
@@ -97,6 +107,15 @@ st.info(
     "from and walks through exactly how any mall's score is calculated, with a real example.",
     icon="📖",
 )
+meta = data_loader.load_meta()
+if meta:
+    built = meta.get("category_scores", {}).get("built_at", "")[:10]
+    st.caption(
+        f"Data built {built or 'on an unknown date'} · {len(df)} malls · "
+        "population and workers: Census 2020 · other layers fetched "
+        f"{meta.get('raw_data', {}).get('latest_fetch', 'on an unknown date')[:10]}. "
+        "Details in data/processed/_meta.json."
+    )
 st.caption(
     "Use the pages in the left sidebar: National Ranking, What-If Simulator, Mall Comparison, "
     "National Map, Strategic Matrix, Methodology, and Regional Priorities."
