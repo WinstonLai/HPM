@@ -99,5 +99,5 @@ st.info(
 )
 st.caption(
     "Use the pages in the left sidebar: National Ranking, What-If Simulator, Mall Comparison, "
-    "National Map, Strategic Matrix, and Methodology."
+    "National Map, Strategic Matrix, Methodology, and Regional Priorities."
 )

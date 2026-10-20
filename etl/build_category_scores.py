@@ -36,6 +36,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from datagovsg import RAW_DIR, feature_attributes, feature_point, load_geojson_features  # noqa: E402
 from geo import haversine_m, min_max_normalize, polygon_centroid  # noqa: E402
+from onemap import name_tokens  # noqa: E402
 
 PROCESSED_DIR = Path(__file__).resolve().parent.parent / "data" / "processed"
 PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
@@ -44,12 +45,20 @@ ON_SITE_RADIUS_M = 200
 NEARBY_RADIUS_M = 500
 CATCHMENT_RADIUS_M = 1200
 BUS_RADIUS_M = 400
+# Reach & Population weights nearby people by distance instead of a hard
+# circle: a subzone's people count in proportion to 1 - distance/this radius.
+REACH_KERNEL_RADIUS_M = 2000
+# OSM fitness venues within this distance of a Gyms@SG / SportSG point are
+# treated as the same venue.
+OSM_DEDUPE_M = 40
+MANUAL_DIR = Path(__file__).resolve().parent.parent / "data" / "manual"
 
 # NParks' Park Facilities file lists every piece of park furniture (mostly
 # carparks, noticeboards, access points, toilets, ...). Only these classes
-# count towards Healthy Infrastructure (charter: children's playgrounds,
-# fitness corners).
-PARK_FACILITY_CLASSES = {"PLAYGROUND", "FITNESS AREA"}
+# count towards Healthy Infrastructure: the charter's children's playgrounds
+# and fitness corners, water refill points (DRINKING FOUNTAIN) and wellness
+# facilities (FOOT RELAX).
+PARK_FACILITY_CLASSES = {"PLAYGROUND", "FITNESS AREA", "DRINKING FOUNTAIN", "FOOT RELAX"}
 
 
 MALL_SUFFIX_RE = re.compile(
@@ -200,17 +209,27 @@ FAR_NAME_MATCHES: list[dict] = []
 
 
 def count_nearby(malls: pd.DataFrame, points: pd.DataFrame, radius_m: float,
-                  building_col: str | None = None, label: str = "") -> np.ndarray:
+                  building_col: str | None = None, label: str = "",
+                  exclusive: bool = False) -> np.ndarray:
     """For each mall, count how many `points` are within radius_m OR share a
     normalised building name with the mall (when building_col is given) AND
     lie within NAME_MATCH_MAX_M of it. Name equality is skipped for names
-    shared by several malls (see ambiguous_name_keys)."""
+    shared by several malls (see ambiguous_name_keys).
+
+    exclusive=True assigns every point to its NEAREST mall only (a point still
+    needs to be within radius_m of that mall). Use it for "on-site" amenities
+    (dining, gyms, clinics, bike racks): otherwise one eatery between two
+    adjacent malls (Bugis Junction / Bugis+, the Orchard cluster) is counted
+    for both. A mall's own building-name match always counts for that mall."""
     counts = np.zeros(len(malls), dtype=int)
     if points.empty:
         return counts
 
     plat = points["lat"].to_numpy(dtype=float)
     plon = points["lon"].to_numpy(dtype=float)
+    nearest = None
+    if exclusive:
+        nearest = np.vstack([haversine_m(m.lat, m.lon, plat, plon) for m in malls.itertuples()]).argmin(axis=0)
 
     point_names = None
     if building_col and building_col in points.columns:
@@ -220,6 +239,8 @@ def count_nearby(malls: pd.DataFrame, points: pd.DataFrame, radius_m: float,
     for i, mall in enumerate(malls.itertuples()):
         dist = haversine_m(mall.lat, mall.lon, plat, plon)
         mask = dist <= radius_m
+        if nearest is not None:
+            mask &= nearest == i
         if point_names is not None:
             mall_norm = normalize_name(mall.name)
             if mall_norm and mall_norm not in ambiguous:
@@ -276,7 +297,7 @@ def load_subzone_centroids() -> pd.DataFrame:
     path = RAW_DIR / "subzone_boundary.geojson"
     if not path.exists():
         print("  [warn] missing subzone_boundary.geojson")
-        return pd.DataFrame(columns=["subzone", "region", "lat", "lon"])
+        return pd.DataFrame(columns=["subzone", "region", "planning_area", "area", "lat", "lon"])
     rows = []
     for feat in load_geojson_features(path):
         props = feat.get("properties", {}) or {}
@@ -286,6 +307,8 @@ def load_subzone_centroids() -> pd.DataFrame:
         if name and centroid:
             region_n = (props.get("REGION_N") or "").title().replace(" Region", "")
             rows.append({"subzone": name, "region": region_n or "Unknown",
+                         "planning_area": (props.get("PLN_AREA_N") or "").strip().upper(),
+                         "area": float(props.get("SHAPE.AREA") or 0.0),
                          "lat": centroid[0], "lon": centroid[1]})
     return pd.DataFrame(rows)
 
@@ -334,6 +357,166 @@ def compute_population_catchment(malls: pd.DataFrame, centroids: pd.DataFrame) -
         total_catchment[i] = stotal[mask].sum()
         senior_catchment[i] = ssenior[mask].sum()
     return total_catchment, senior_catchment
+
+
+def assign_planning_area(malls: pd.DataFrame, centroids: pd.DataFrame) -> pd.Series:
+    """URA planning area (upper case) of each mall's nearest subzone centroid."""
+    if centroids.empty:
+        return pd.Series([""] * len(malls), index=malls.index)
+    clat = centroids["lat"].to_numpy(dtype=float)
+    clon = centroids["lon"].to_numpy(dtype=float)
+    pa = centroids["planning_area"].to_numpy()
+    return pd.Series([pa[int(np.argmin(haversine_m(m.lat, m.lon, clat, clon)))] for m in malls.itertuples()],
+                     index=malls.index)
+
+
+def load_workers_by_planning_area() -> pd.Series:
+    """Employed residents by planning area of WORKPLACE (Census 2020), indexed
+    by upper-case planning area. Residents only: foreign workers and visitors
+    are not included, so this understates daytime population, most of all for
+    the CBD and the airport."""
+    path = RAW_DIR / "workers_by_workplace_pa_2020.csv"
+    if not path.exists():
+        print("  [warn] missing workers_by_workplace_pa_2020.csv -- worker component will be 0")
+        return pd.Series(dtype=float)
+    df = pd.read_csv(path)
+    df["pa"] = df["Number"].astype(str).str.strip().str.upper()
+    df = df[df["pa"] != "TOTAL"]
+    return pd.to_numeric(df.set_index("pa")["Total_Total"], errors="coerce").dropna()
+
+
+def build_subzone_table(centroids: pd.DataFrame) -> pd.DataFrame:
+    """One row per URA subzone with residents, seniors and workers. Residents
+    come from the subzone-level census; workers are only published per
+    planning area, so each planning area's workers are spread over its
+    subzones in proportion to polygon area -- an approximation (commercial
+    subzones are small, so they are under-weighted within their area)."""
+    sub = centroids.copy()
+    sub["key"] = sub["subzone"].str.upper().str.strip()
+    pop = load_subzone_population()
+    if not pop.empty:
+        pop["key"] = pop["subzone"].str.upper().str.strip()
+        sub = sub.merge(pop[["key", "total_pop", "senior_pop"]], on="key", how="left")
+    else:
+        sub["total_pop"], sub["senior_pop"] = 0.0, 0.0
+    sub[["total_pop", "senior_pop"]] = sub[["total_pop", "senior_pop"]].fillna(0.0)
+
+    workers = load_workers_by_planning_area()
+    area_total = sub.groupby("planning_area")["area"].transform("sum").replace(0, np.nan)
+    pa_workers = sub["planning_area"].map(workers).fillna(0.0)
+    sub["workers"] = (pa_workers * sub["area"] / area_total).fillna(0.0)
+    # The census file also has non-geographic rows (works from home, no fixed
+    # location, ...), which cannot be placed on a map.
+    non_geographic = ("NO FIXED LOCATION FOR WORK", "OTHER PLANNING AREAS OR OUTSIDE SINGAPORE", "WORKS FROM HOME")
+    missing = sorted(set(workers.index) - set(sub["planning_area"]) - set(non_geographic))
+    if missing:
+        print(f"  [warn] worker planning areas with no matching subzones (workers dropped): {missing}")
+    return sub
+
+
+def kernel_catchments(malls: pd.DataFrame, sub: pd.DataFrame, cols: list[str],
+                      radius_m: float = REACH_KERNEL_RADIUS_M) -> pd.DataFrame:
+    """Distance-weighted sum of each `cols` value over subzone centroids: a
+    subzone counts fully at the mall and fades linearly to nothing at
+    radius_m. Unlike a hard 1.2km circle, a subzone whose centroid sits just
+    outside the line no longer vanishes, and nearby people count for more."""
+    slat = sub["lat"].to_numpy(dtype=float)
+    slon = sub["lon"].to_numpy(dtype=float)
+    values = {c: sub[c].to_numpy(dtype=float) for c in cols}
+    out = {c: np.zeros(len(malls)) for c in cols}
+    for i, mall in enumerate(malls.itertuples()):
+        w = np.clip(1.0 - haversine_m(mall.lat, mall.lon, slat, slon) / radius_m, 0.0, 1.0)
+        for c in cols:
+            out[c][i] = float((w * values[c]).sum())
+    return pd.DataFrame(out, index=malls.index)
+
+
+def station_access(malls: pd.DataFrame, exits: pd.DataFrame,
+                   radius_m: float = CATCHMENT_RADIUS_M) -> pd.DataFrame:
+    """Transit access by STATION, not by exit. The LTA file has one row per
+    exit, so an interchange with eight exits used to look like eight stations.
+    Per mall: how many distinct stations lie within radius_m, the distance to
+    the nearest one, and a distance-decayed station count (each station
+    contributes 1 - distance/radius, using its nearest exit)."""
+    cols = ["mrt_count", "mrt_nearest_m", "mrt_access_index"]
+    if exits.empty or "STATION_NA" not in exits.columns:
+        return pd.DataFrame(0.0, index=malls.index, columns=cols)
+    station = exits["STATION_NA"].fillna("").astype(str).str.strip().str.upper()
+    lat, lon = exits["lat"].to_numpy(dtype=float), exits["lon"].to_numpy(dtype=float)
+    rows = []
+    for mall in malls.itertuples():
+        d = pd.Series(haversine_m(mall.lat, mall.lon, lat, lon)).groupby(station.to_numpy()).min()
+        rows.append({
+            "mrt_count": int((d <= radius_m).sum()),
+            "mrt_nearest_m": float(d.min()),
+            "mrt_access_index": float(np.clip(1.0 - d / radius_m, 0.0, 1.0).sum()),
+        })
+    return pd.DataFrame(rows, index=malls.index)
+
+
+def decayed_count(malls: pd.DataFrame, points: pd.DataFrame, radius_m: float) -> np.ndarray:
+    """Distance-decayed count: each point within radius_m adds 1 - d/radius."""
+    out = np.zeros(len(malls))
+    if points.empty:
+        return out
+    plat = points["lat"].to_numpy(dtype=float)
+    plon = points["lon"].to_numpy(dtype=float)
+    for i, mall in enumerate(malls.itertuples()):
+        out[i] = float(np.clip(1.0 - haversine_m(mall.lat, mall.lon, plat, plon) / radius_m, 0.0, 1.0).sum())
+    return out
+
+
+def dedupe_against(candidates: pd.DataFrame, existing: pd.DataFrame, within_m: float) -> pd.DataFrame:
+    """Drop `candidates` (e.g. OSM gyms) lying within `within_m` of any
+    `existing` point (e.g. the same gym in Gyms@SG), and collapse candidates
+    that duplicate each other (OSM often maps a gym as both a node and a way)."""
+    if candidates.empty:
+        return candidates
+    keep = np.ones(len(candidates), dtype=bool)
+    clat = candidates["lat"].to_numpy(dtype=float)
+    clon = candidates["lon"].to_numpy(dtype=float)
+    if not existing.empty:
+        elat, elon = existing["lat"].to_numpy(dtype=float), existing["lon"].to_numpy(dtype=float)
+        for i in range(len(candidates)):
+            if haversine_m(clat[i], clon[i], elat, elon).min() <= within_m:
+                keep[i] = False
+    for i in range(len(candidates)):
+        if not keep[i]:
+            continue
+        dup = haversine_m(clat[i], clon[i], clat[i + 1:], clon[i + 1:]) <= within_m
+        keep[i + 1:][dup] = False
+    return candidates[keep].reset_index(drop=True)
+
+
+def name_key(name: str) -> str:
+    return "".join(name_tokens(name or ""))
+
+
+def flag_existing_hpm(malls: pd.DataFrame) -> pd.Series:
+    """1 for malls listed in data/manual/existing_hpm.csv (columns: name,
+    source) -- HPB's existing Health Promoting Malls. The file is supplied by
+    HPB CIP; with none, every mall is 0 and the dashboard says the index
+    cannot be validated. Matched on name or any alias."""
+    flags = pd.Series(0, index=malls.index)
+    path = MANUAL_DIR / "existing_hpm.csv"
+    if not path.exists():
+        return flags
+    listed = pd.read_csv(path, dtype=str).fillna("")
+    wanted = {name_key(n): n for n in listed.get("name", []) if n.strip()}
+    if not wanted:
+        return flags
+    aliases = malls["aliases"].fillna("") if "aliases" in malls.columns else pd.Series("", index=malls.index)
+    found = set()
+    for idx, row in malls.iterrows():
+        keys = {name_key(row["name"])} | {name_key(a) for a in str(aliases[idx]).split("; ") if a}
+        hit = keys & set(wanted)
+        if hit:
+            flags[idx] = 1
+            found |= hit
+    for k, n in wanted.items():
+        if k not in found:
+            print(f"  [warn] existing_hpm.csv: '{n}' does not match any mall in the registry")
+    return flags
 
 
 def compute_untapped_demand(malls: pd.DataFrame, pop_catchment: np.ndarray,
@@ -423,6 +606,8 @@ def build_category_scores() -> pd.DataFrame:
     print("Assigning authoritative region (nearest URA subzone) ...")
     subzone_centroids = load_subzone_centroids()
     out["region"] = assign_region(malls, subzone_centroids)
+    out["planning_area"] = assign_planning_area(malls, subzone_centroids).str.title()
+    out["is_existing_hpm"] = flag_existing_hpm(malls)
 
     print("Category A - Healthy Dining Ecosystem (incl. supermarkets) ...")
     dining = load_points("healthier_eateries.geojson")
@@ -438,19 +623,33 @@ def build_category_scores() -> pd.DataFrame:
         "supermarket_licences.csv", ["building_name", "block_house_num", "street_name"]
     )
     out["A_supermarket_count"] = count_by_address_text(malls, supermarkets)
+    eatery_counts = count_nearby(malls, dining, ON_SITE_RADIUS_M, "ADDRESSBUILDINGNAME",
+                                 label="healthier_eateries", exclusive=True)
     out["A_dining_count"] = (
-        count_nearby(malls, dining, ON_SITE_RADIUS_M, "ADDRESSBUILDINGNAME", label="healthier_eateries")
-        + count_by_address_text(malls, dining_partners)
-        + out["A_supermarket_count"]
+        eatery_counts + count_by_address_text(malls, dining_partners) + out["A_supermarket_count"]
     )
     out["A_dining_score"] = min_max_normalize(out["A_dining_count"])
 
+    # Diagnostics for the charter's "% of F&B outlets" metric. NOT part of the
+    # index: OpenStreetMap's F&B coverage inside malls is patchy, so the share
+    # can only be trusted once HPB CIP has reviewed it (see the Methodology page).
+    fnb = load_points("osm_fnb.geojson")
+    out["A_hdp_outlets"] = eatery_counts
+    out["A_fnb_osm_count"] = count_nearby(malls, fnb, ON_SITE_RADIUS_M, exclusive=True)
+    reliable = out["A_fnb_osm_count"] >= 5
+    out["A_healthier_share"] = (out["A_hdp_outlets"] / out["A_fnb_osm_count"].where(reliable)).round(3)
+
     print("Category B - Physical Activity Ecosystem ...")
-    fitness = pd.concat([
+    official_fitness = pd.concat([
         load_points("gyms_at_sg.geojson"),
         load_points("sportsg_sport_facilities.geojson"),
     ], ignore_index=True)
-    out["B_fitness_count"] = count_nearby(malls, fitness, ON_SITE_RADIUS_M)
+    # Gyms@SG only lists HPB-registered gyms; OpenStreetMap adds commercial
+    # gyms and studios. OSM points duplicating a listed venue are dropped.
+    osm_fitness = dedupe_against(load_points("osm_fitness.geojson"), official_fitness, OSM_DEDUPE_M)
+    fitness = pd.concat([official_fitness, osm_fitness], ignore_index=True)
+    out["B_osm_fitness_count"] = count_nearby(malls, osm_fitness, ON_SITE_RADIUS_M, exclusive=True)
+    out["B_fitness_count"] = count_nearby(malls, fitness, ON_SITE_RADIUS_M, exclusive=True)
     out["B_fitness_score"] = min_max_normalize(out["B_fitness_count"])
 
     print("Category C - H365 & HPB Engagement (community-club proxy) ...")
@@ -462,7 +661,7 @@ def build_category_scores() -> pd.DataFrame:
     healthcare = load_points("chas_clinics.geojson")
     pharmacies = load_csv_addresses("licensed_pharmacies.csv", "PharmacyAddress")
     out["D_healthcare_count"] = (
-        count_nearby(malls, healthcare, ON_SITE_RADIUS_M, "BUILDING_NAME", label="chas_clinics")
+        count_nearby(malls, healthcare, ON_SITE_RADIUS_M, "BUILDING_NAME", label="chas_clinics", exclusive=True)
         + count_by_address_text(malls, pharmacies)
     )
     out["D_healthcare_score"] = min_max_normalize(out["D_healthcare_count"])
@@ -475,7 +674,7 @@ def build_category_scores() -> pd.DataFrame:
         ]
     infra = pd.concat([load_points("parks_at_sg.geojson"), park_facilities], ignore_index=True)
     bike_racks = load_points("bicycle_racks.geojson")
-    out["E_bike_rack_count"] = count_nearby(malls, bike_racks, ON_SITE_RADIUS_M)
+    out["E_bike_rack_count"] = count_nearby(malls, bike_racks, ON_SITE_RADIUS_M, exclusive=True)
     out["E_infra_count"] = count_nearby(malls, infra, NEARBY_RADIUS_M) + out["E_bike_rack_count"]
     out["E_infra_score"] = min_max_normalize(out["E_infra_count"])
 
@@ -483,20 +682,38 @@ def build_category_scores() -> pd.DataFrame:
     out["F_partnership_score"] = compute_category_f(malls)
 
     print("Demand side - population catchment, accessibility ...")
+    # Residents in a hard 1.2km circle: kept for the Engagement Gap, whose
+    # amenity counts use the same circle.
     total_pop, senior_pop = compute_population_catchment(malls, subzone_centroids)
     out["pop_catchment"] = total_pop
     out["senior_pop_catchment"] = senior_pop
+
+    # Reach & Population uses a distance-weighted catchment instead, and adds
+    # workers (the charter's "worker population") so CBD / airport / office
+    # malls are not scored as if nobody were ever there.
+    sub = build_subzone_table(subzone_centroids)
+    reach = kernel_catchments(malls, sub, ["total_pop", "senior_pop", "workers"])
+    out["pop_reach_weighted"] = reach["total_pop"].round(0)
+    out["senior_reach_weighted"] = reach["senior_pop"].round(0)
+    out["worker_reach_weighted"] = reach["workers"].round(0)
     out["reach_population_score"] = (
-        min_max_normalize(pd.Series(total_pop)) * 0.7
-        + min_max_normalize(pd.Series(senior_pop)) * 0.3
+        min_max_normalize(reach["total_pop"]) * 0.5
+        + min_max_normalize(reach["senior_pop"]) * 0.3
+        + min_max_normalize(reach["workers"]) * 0.2
     )
+    # Catchments with more (distance-weighted) workers than residents.
+    out["daytime_led"] = (reach["workers"] > reach["total_pop"]).astype(int)
 
     mrt = load_points("mrt_station_exits.geojson")
     bus = load_points("bus_stops.geojson")
-    out["mrt_count"] = count_nearby(malls, mrt, CATCHMENT_RADIUS_M)
+    stations = station_access(malls, mrt)
+    out["mrt_count"] = stations["mrt_count"].astype(int)
+    out["mrt_nearest_m"] = stations["mrt_nearest_m"].round(0)
+    out["mrt_access_index"] = stations["mrt_access_index"].round(3)
     out["bus_count"] = count_nearby(malls, bus, BUS_RADIUS_M)
+    out["bus_access_index"] = decayed_count(malls, bus, BUS_RADIUS_M).round(3)
     out["accessibility_score"] = (
-        min_max_normalize(out["mrt_count"]) * 0.5 + min_max_normalize(out["bus_count"]) * 0.5
+        min_max_normalize(out["mrt_access_index"]) * 0.5 + min_max_normalize(out["bus_access_index"]) * 0.5
     )
 
     # Engagement Gap ("untapped demand"): charter lists "low healthy dining

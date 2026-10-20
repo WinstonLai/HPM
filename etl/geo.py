@@ -56,9 +56,25 @@ def nearby_mask(mall_lat, mall_lon, lats: np.ndarray, lons: np.ndarray, radius_m
     return dist <= radius_m
 
 
-def min_max_normalize(series):
-    """Min-max scale a pandas Series to 0-100. Constant/empty series -> all zeros."""
+# Raw counts are heavy-tailed: one mall with 50 eateries stretches the scale so
+# the typical mall (median 8) scores ~16. Capping at the 95th percentile keeps
+# the top ~5% of malls tied at 100 but stops them squashing everyone else, and
+# brings each category's *effective* weight (weight x spread) close to its
+# nominal weight.
+WINSOR_QUANTILE = 0.95
+
+
+def min_max_normalize(series, cap_quantile: float | None = WINSOR_QUANTILE):
+    """Min-max scale a pandas Series to 0-100, first capping values at
+    `cap_quantile` (pass None for a plain min-max). The cap is ignored when it
+    would not exceed the minimum (e.g. a mostly-zero series whose 95th
+    percentile is still 0). Constant/empty series -> all zeros."""
     lo, hi = series.min(), series.max()
+    if cap_quantile is not None:
+        cap = series.quantile(cap_quantile)
+        if cap > lo:
+            hi = cap
+            series = series.clip(upper=cap)
     if hi - lo < 1e-9:
         return series * 0
     return (series - lo) / (hi - lo) * 100

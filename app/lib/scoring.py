@@ -19,4 +19,7 @@ from scoring_formula import (  # noqa: F401,E402
     add_strategic_quadrant,
     compute_index,
     exclude_proxies,
+    hpm_backtest,
+    rank_stability,
+    scenario_comparison,
 )

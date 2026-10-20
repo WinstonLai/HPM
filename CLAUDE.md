@@ -84,7 +84,9 @@ Two independent halves connected only through `data/processed/*.csv`:
      whatever region a mall's Wikipedia source gave it — most malls
      don't carry one at scrape time since only the first of the three
      sources above is region-organised.
-   - `build_amenities.py` downloads the 15 raw datasets (dataset IDs are
+   - `build_amenities.py` downloads the 16 raw data.gov.sg datasets plus two
+     OpenStreetMap extracts (`osm.py`, Overpass API; commercial gyms and F&B
+     outlets). Dataset IDs are
      defined here, grouped by category A–G, excluding F which is a scraped
      proxy with no downloadable dataset) → `data/raw/`.
    - `build_category_scores.py` joins every raw dataset to the mall registry
@@ -103,10 +105,12 @@ Two independent halves connected only through `data/processed/*.csv`:
 
 2. **`app/`** — the Streamlit dashboard, reads only `data/processed/*.csv`,
    never calls external APIs live. `Home.py` is the entrypoint (Page 1 —
-   Executive Summary); `app/pages/` holds Pages 2–7 (National Ranking,
+   Executive Summary); `app/pages/` holds Pages 2–8 (National Ranking,
    What-If Simulator, Mall Comparison, National Map, Strategic Matrix — a
-   2×2 Readiness×Demand quadrant enhancement — and Methodology, an
-   interactive walkthrough of the scoring math and data-source limitations).
+   2×2 Readiness×Demand quadrant enhancement — Methodology, an
+   interactive walkthrough of the scoring math, data-source limitations and
+   weight robustness — and Regional Priorities, a region/planning-area and
+   landlord rollup plus a backtest against existing HPMs).
    Each page file does its own `sys.path.insert` to reach `app/lib/`
    (there's no package `__init__.py`; pages are run as standalone scripts
    by Streamlit).
@@ -153,8 +157,8 @@ based on what fields it actually publishes:
   `data/processed/matching_qa.csv`; a mall listed there probably has a bad
   geocode.
 
-Every raw count is min-max normalized to 0–100 across the mall population
-(not divided by each mall's total tenant count, which the charter's own
+Every raw count is capped at the 95th percentile (`geo.WINSOR_QUANTILE`) and
+then min-max normalized to 0–100 across the mall population (not divided by each mall's total tenant count, which the charter's own
 worked example uses — that needs a per-mall tenant directory that doesn't
 publicly exist). See the README's "Known proxies / limitations" section for
 the specific proxies used for Category C (H365 engagement → community-club
@@ -163,8 +167,13 @@ size), and don't present those proxy scores as the literal metric named in
 the charter without that caveat.
 
 Other deliberate scoring choices to preserve (details in the README's
-limitations section): Category E only counts NParks `PLAYGROUND`/`FITNESS AREA`
-rows (the file is mostly carparks/noticeboards); Category A drops Healthier
+limitations section): Category E only counts NParks `PLAYGROUND`/`FITNESS AREA`/
+`DRINKING FOUNTAIN`/`FOOT RELAX` rows (the file is mostly carparks/noticeboards);
+on-site amenities (dining, gyms, clinics, bike racks) are assigned to their
+*nearest* mall only (`count_nearby(exclusive=True)`); MRT access is counted per
+*station* with distance decay, not per exit; Reach & Population is a
+distance-weighted catchment of residents, seniors and workers (the Engagement
+Gap keeps the hard 1.2km circle to match its amenity counts); Category A drops Healthier
 Dining Partner outlets that duplicate a Healthier Eatery (postal code + brand);
 Engagement Gap is the *shortfall* of 1.2km-catchment amenities versus the
 amount expected for that population (a log-log fit), rank-scaled — not a raw

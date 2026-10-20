@@ -32,6 +32,7 @@ build always agree on how a score is computed.
 """
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 # --- Supply Readiness sub-weights (renormalised to 100) ---
@@ -173,3 +174,114 @@ def add_strategic_quadrant(df: pd.DataFrame) -> pd.DataFrame:
     df["demand_high"] = df["demand_score"] >= demand_med
     df["quadrant"] = df.apply(strategic_quadrant, axis=1)
     return df
+
+
+# --- robustness: how much does the ranking depend on the weights? ------------
+
+def _block_matrix(df: pd.DataFrame, cols: list[str], W: np.ndarray) -> np.ndarray:
+    """Weighted block scores for many weight vectors at once. W is (len(cols),
+    n_draws). NaN scores drop out per mall exactly as in `_weighted_sum`."""
+    X = df[cols].to_numpy(dtype=float)
+    present = ~np.isnan(X)
+    num = np.nan_to_num(X) @ W
+    den = present.astype(float) @ W
+    return np.where(den > 0, num / np.where(den > 0, den, 1.0), 0.0)
+
+
+def rank_stability(
+    category_scores: pd.DataFrame,
+    n_draws: int = 500,
+    seed: int = 7,
+    concentration: float = 60.0,
+    supply_block_range: tuple[float, float] = (60.0, 80.0),
+) -> pd.DataFrame:
+    """Re-rank every mall under `n_draws` randomly perturbed weightings and
+    report how stable each rank is. Supply and Demand sub-weights are drawn
+    from Dirichlet distributions centred on the defaults (higher
+    `concentration` = tighter), and the Supply share of the index is drawn
+    uniformly from `supply_block_range`. Columns: default_rank, median_rank,
+    rank_p5/p95 (the 5th/95th percentile rank), pct_top10/20/50 (share of
+    draws in which the mall makes that shortlist)."""
+    rng = np.random.default_rng(seed)
+    s_cols, d_cols = list(DEFAULT_SUPPLY_WEIGHTS), list(DEFAULT_DEMAND_WEIGHTS)
+    s0 = np.array(list(DEFAULT_SUPPLY_WEIGHTS.values()), dtype=float)
+    d0 = np.array(list(DEFAULT_DEMAND_WEIGHTS.values()), dtype=float)
+    Ws = rng.dirichlet(concentration * s0 / s0.sum(), size=n_draws).T
+    Wd = rng.dirichlet(concentration * d0 / d0.sum(), size=n_draws).T
+    block = rng.uniform(*supply_block_range, size=n_draws) / 100.0
+
+    supply = _block_matrix(category_scores, s_cols, Ws)
+    demand = _block_matrix(category_scores, d_cols, Wd)
+    index = supply * block + demand * (1.0 - block)            # (malls, draws)
+    ranks = (-index).argsort(axis=0).argsort(axis=0) + 1
+
+    base = compute_index(category_scores)[["mall_id", "name", "rank"]].rename(columns={"rank": "default_rank"})
+    order = category_scores.reset_index(drop=True)[["mall_id"]]
+    out = order.merge(base, on="mall_id", how="left")
+    out["median_rank"] = np.median(ranks, axis=1)
+    out["rank_p5"] = np.percentile(ranks, 5, axis=1)
+    out["rank_p95"] = np.percentile(ranks, 95, axis=1)
+    for n in (10, 20, 50):
+        out[f"pct_top{n}"] = (ranks <= n).mean(axis=1) * 100
+    return out.sort_values("default_rank").reset_index(drop=True)
+
+
+def _rank_corr(a: pd.Series, b: pd.Series) -> float:
+    return float(a.rank().corr(b.rank()))
+
+
+def scenario_comparison(category_scores: pd.DataFrame) -> pd.DataFrame:
+    """How different would the shortlist be under other defensible readings of
+    the charter's weights? Each scenario is compared with the default ranking:
+    `top10_overlap` is how many of its Top 10 are also in the default Top 10,
+    `rank_corr` the Spearman correlation of the two index scores.
+
+    The charter is ambiguous: its category weights (25/20/15/10/10/10 + Demand
+    Potential 10) sum to 100 with Supply at 90%, yet its composite formula says
+    Supply 70% / Demand 30%. "charter_literal" follows the first reading."""
+    base = compute_index(category_scores)
+    base_top = set(base.nsmallest(10, "rank")["mall_id"])
+    scenarios = {
+        "Default (70/30, proxies down-weighted)": {},
+        "Charter category weights, 70/30": {"supply_weights": CHARTER_SUPPLY_WEIGHTS},
+        "Proxy categories (C, F) excluded": {"supply_weights": exclude_proxies(DEFAULT_SUPPLY_WEIGHTS)},
+        "Charter weights read literally (Supply 90 / Demand 10)": {
+            "supply_weights": CHARTER_SUPPLY_WEIGHTS, "supply_block_weight": 90, "demand_block_weight": 10},
+        "All six Supply categories equal": {"supply_weights": {k: 1 for k in CHARTER_SUPPLY_WEIGHTS}},
+        "Supply only (ignore Demand)": {"supply_block_weight": 100, "demand_block_weight": 0},
+    }
+    rows = []
+    for label, kwargs in scenarios.items():
+        alt = compute_index(category_scores, **kwargs)
+        merged = base[["mall_id", "hpm_index"]].merge(alt[["mall_id", "hpm_index"]], on="mall_id", suffixes=("", "_alt"))
+        rows.append({
+            "Scenario": label,
+            "Top-10 overlap with default": len(base_top & set(alt.nsmallest(10, "rank")["mall_id"])),
+            "Rank correlation with default": round(_rank_corr(merged["hpm_index"], merged["hpm_index_alt"]), 3),
+        })
+    return pd.DataFrame(rows)
+
+
+def hpm_backtest(index_df: pd.DataFrame) -> dict | None:
+    """Do HPB's existing Health Promoting Malls rank higher than the rest?
+    Needs `is_existing_hpm` (from data/manual/existing_hpm.csv). Returns None
+    when no mall is flagged (or all are). AUC is the probability that a
+    randomly chosen existing HPM scores higher than a randomly chosen other
+    mall (0.5 = no better than chance, 1.0 = perfect separation)."""
+    if "is_existing_hpm" not in index_df.columns:
+        return None
+    flag = index_df["is_existing_hpm"].fillna(0).astype(int) == 1
+    n1, n0 = int(flag.sum()), int((~flag).sum())
+    if n1 == 0 or n0 == 0:
+        return None
+    ranks = index_df["hpm_index"].rank()                       # ascending: best = highest
+    auc = (ranks[flag].sum() - n1 * (n1 + 1) / 2) / (n1 * n0)
+    n = len(index_df)
+    return {
+        "n_existing_hpm": n1,
+        "median_rank": float(index_df.loc[flag, "rank"].median()),
+        "mean_percentile": float((1 - (index_df.loc[flag, "rank"] - 1) / max(n - 1, 1)).mean() * 100),
+        "in_top20": int((index_df.loc[flag, "rank"] <= 20).sum()),
+        "in_top50": int((index_df.loc[flag, "rank"] <= 50).sum()),
+        "auc": float(auc),
+    }
