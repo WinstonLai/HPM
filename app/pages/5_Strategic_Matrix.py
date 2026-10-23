@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 import data_loader  # noqa: E402
 import scoring  # noqa: E402
 import weights  # noqa: E402
+from safe_text import escape_html, to_csv_bytes  # noqa: E402
 
 st.set_page_config(page_title="Strategic Matrix | HPM Dashboard", page_icon="🧭", layout="wide")
 st.title("🧭 Strategic Matrix")
@@ -49,16 +50,18 @@ QUADRANT_COLORS = {
     "Strategic Investment": "#E69F00",
     "Future Monitoring": "#999999",
 }
-df["label"] = df["name"].where(df["rank"] <= label_n, "")
+# Plotly renders labels and hover text as pseudo-HTML, so escape the scraped names.
+df["label"] = df["name"].where(df["rank"] <= label_n, "").map(escape_html)
+df["hover_label"] = df["name"].map(escape_html)
 df["hpm_status"] = df["is_existing_hpm"].map({1: "Existing HPM", 0: "Not yet an HPM"}) if has_hpm_list else "Mall"
 df["nearby_people"] = (df["pop_reach_weighted"] + df["worker_reach_weighted"]).clip(lower=1) \
     if {"pop_reach_weighted", "worker_reach_weighted"} <= set(df.columns) else 1.0
 
 fig = px.scatter(
     df, x="demand_score", y="supply_score", color="quadrant", color_discrete_map=QUADRANT_COLORS,
-    size="nearby_people" if size_by_pop else None, size_max=22, text="label", hover_name="name",
+    size="nearby_people" if size_by_pop else None, size_max=22, text="label", hover_name="hover_label",
     hover_data={"rank": True, "region": True, "operator": True, "hpm_index": ":.1f", "demand_score": ":.1f",
-                "supply_score": ":.1f", "label": False, "nearby_people": False, "hpm_status": False},
+                "supply_score": ":.1f", "label": False, "hover_label": False, "nearby_people": False, "hpm_status": False},
     labels={"demand_score": "Demand Opportunity Score →", "supply_score": "Supply Readiness Score →",
             "quadrant": "Quadrant", "hpm_status": "", "hpm_index": "HPM Index", "rank": "Rank"},
     category_orders={"quadrant": list(QUADRANT_COLORS)},
@@ -121,5 +124,5 @@ table = subset[["rank", "name", "region", "operator", "supply_score", "demand_sc
              "supply_score": "Supply", "demand_score": "Demand", "hpm_index": "HPM Index"})
 st.dataframe(table.style.format({"Supply": "{:.1f}", "Demand": "{:.1f}", "HPM Index": "{:.1f}"}),
              hide_index=True, use_container_width=True)
-st.download_button(f"Download {selected_quadrant} (CSV)", table.to_csv(index=False).encode("utf-8"),
+st.download_button(f"Download {selected_quadrant} (CSV)", to_csv_bytes(table),
                    file_name=f"hpm_{selected_quadrant.lower().replace(' ', '_')}.csv", mime="text/csv")

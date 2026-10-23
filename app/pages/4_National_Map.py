@@ -10,6 +10,7 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 import data_loader  # noqa: E402
 import weights  # noqa: E402
+from safe_text import escape_html, escape_md  # noqa: E402
 
 st.set_page_config(page_title="National Map | HPM Dashboard", page_icon="🗺️", layout="wide")
 st.title("🗺️ National Map")
@@ -63,6 +64,9 @@ shown["radius"] = 120 + shown["hpm_index"] * 3          # metres
 shown["score_label"] = shown["hpm_index"].map("{:.1f}".format)
 shown["supply_label"] = shown["supply_score"].map("{:.1f}".format)
 shown["demand_label"] = shown["demand_score"].map("{:.1f}".format)
+# The tooltip is rendered as HTML, so scraped text must be escaped first.
+shown["tip_name"] = shown["name"].map(escape_html)
+shown["tip_region"] = shown["region"].map(escape_html)
 
 if focus == "(whole of Singapore)":
     view_state = pdk.ViewState(latitude=1.3521, longitude=103.8198, zoom=10.5, pitch=0)
@@ -82,8 +86,8 @@ if highlight_hpm:
         get_radius="radius * 1.0", radius_min_pixels=10, radius_max_pixels=28, pickable=False,
     ))
 tooltip = {
-    "html": "<b>{name}</b><br/>Rank {rank} · Score {score_label} · {tier}<br/>"
-            "Supply {supply_label} · Demand {demand_label}<br/>{region}",
+    "html": "<b>{tip_name}</b><br/>Rank {rank} · Score {score_label} · {tier}<br/>"
+            "Supply {supply_label} · Demand {demand_label}<br/>{tip_region}",
     "style": {"backgroundColor": "#1f2937", "color": "white"},
 }
 st.pydeck_chart(pdk.Deck(layers=layers, initial_view_state=view_state, tooltip=tooltip,
@@ -108,4 +112,4 @@ if focus != "(whole of Singapore)":
     c2.metric("HPM Index", f"{sel['hpm_index']:.1f}", help=f"Tier: {sel['tier']}")
     c3.metric("Supply", f"{sel['supply_score']:.1f}")
     c4.metric("Demand", f"{sel['demand_score']:.1f}")
-    st.caption(f"{sel['region']} · {sel['operator']}" + (" · existing HPM" if has_hpm_list and sel["is_existing_hpm"] == 1 else ""))
+    st.caption(f"{escape_md(sel['region'])} · {escape_md(sel['operator'])}" + (" · existing HPM" if has_hpm_list and sel["is_existing_hpm"] == 1 else ""))

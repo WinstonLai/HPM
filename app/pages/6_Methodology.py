@@ -14,6 +14,7 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 import data_loader  # noqa: E402
 import scoring  # noqa: E402
+from safe_text import escape_md  # noqa: E402
 
 st.set_page_config(page_title="Methodology | HPM Dashboard", page_icon="📖", layout="wide")
 st.title("📖 Methodology: How the Score Works")
@@ -307,7 +308,7 @@ st.latex(
     + rf"\times {scoring.DEMAND_BLOCK_WEIGHT / 100:.2f} = " + f"{row['hpm_index']:.1f}"
 )
 st.success(
-    f"**{mall_name}**'s HPM Index is **{row['hpm_index']:.1f} / 100** — "
+    f"**{escape_md(mall_name)}**'s HPM Index is **{row['hpm_index']:.1f} / 100** — "
     f"rank **#{int(row['rank'])}** of {len(index_df)}, **{row['tier']}** tier, in the "
     f"**{row['quadrant']}** quadrant of the Strategic Matrix."
 )

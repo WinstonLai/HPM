@@ -1,0 +1,5 @@
+dataset,mall,n_far_name_matches,max_distance_m
+healthier_eateries,Rivervale Plaza,8,1070
+healthier_eateries,SingPost,6,5857
+chas_clinics,Rivervale Plaza,3,849
+healthier_eateries,Bedok Mall,1,2024
