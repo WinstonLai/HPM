@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -35,3 +36,26 @@ def load_meta() -> dict:
 
 def data_available() -> bool:
     return (PROCESSED_DIR / "category_scores.csv").exists() and (PROCESSED_DIR / "hpm_index.csv").exists()
+
+
+def data_age_days() -> int | None:
+    """Days since the raw datasets were last fetched (or the scores built); None if unknown."""
+    meta = load_meta()
+    stamp = meta.get("raw_data", {}).get("latest_fetch") or meta.get("category_scores", {}).get("built_at")
+    try:
+        when = datetime.fromisoformat(stamp)
+    except (TypeError, ValueError):
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return max((datetime.now(timezone.utc) - when).days, 0)
+
+
+@st.cache_data
+def load_aliases() -> pd.Series:
+    """Other names each mall is known by (mall_id -> "A; B"), from the registry; empty if unavailable."""
+    path = PROCESSED_DIR / "malls.csv"
+    try:
+        return pd.read_csv(path, usecols=["mall_id", "aliases"]).set_index("mall_id")["aliases"].fillna("")
+    except (OSError, ValueError):
+        return pd.Series(dtype=str)
