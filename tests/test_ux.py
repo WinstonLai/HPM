@@ -17,6 +17,11 @@ RANKING = str(APP / "pages" / "1_National_Ranking.py")
 CUSTOM = {**weights.default_settings(), "exclude_proxies": True}
 
 
+def as_list(value) -> list:
+    """AppTest hands back a single query-param value as a str or a one-item list depending on the Streamlit version."""
+    return [value] if isinstance(value, str) else list(value)
+
+
 def run(page: str, **state) -> AppTest:
     at = AppTest.from_file(page, default_timeout=120)
     for key, value in state.items():
@@ -51,7 +56,7 @@ def test_ranking_filters_load_from_the_url_and_ignore_invalid_values():
     assert not at.exception
     assert at.session_state["f_regions"] == ["West"]                 # "Atlantis" is not a region
     assert at.session_state["f_tiers"] == ["Platinum"]
-    assert at.query_params["region"] == ["West"]                     # the URL is rewritten to match
+    assert as_list(at.query_params["region"]) == ["West"]                     # the URL is rewritten to match
     shown = int(at.caption[0].value.split()[1])
     assert 0 < shown < 187
 
@@ -59,7 +64,7 @@ def test_ranking_filters_load_from_the_url_and_ignore_invalid_values():
 def test_ranking_filters_are_mirrored_to_the_url_and_can_be_cleared():
     at = run(RANKING)
     at.text_input(key="f_search").set_value("Tampines").run()
-    assert at.query_params["q"] == ["Tampines"]
+    assert as_list(at.query_params["q"]) == ["Tampines"]
     at.sidebar.button[-1].click().run()                              # Clear filters
     assert at.session_state["f_search"] == "" and "q" not in at.query_params
 
