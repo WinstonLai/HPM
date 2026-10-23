@@ -88,7 +88,7 @@ def linked_weight_sliders(group_keys: list[str], initial: dict, key_prefix: str)
 
 
 with st.sidebar:
-    st.button("Reset to defaults", on_click=weights.reset, use_container_width=True)
+    st.button("Reset to defaults", on_click=weights.reset, width="stretch")
 
     st.header("Supply Readiness weights")
     st.caption("Sliders are linked and always sum to 100% — raising one lowers the rest proportionally.")
@@ -161,7 +161,7 @@ for tab, n in zip((tab1, tab2, tab3), (10, 20, 50)):
         st.dataframe(
             shortlist.style.format({"Score": "{:.1f}"}),
             hide_index=True,
-            use_container_width=True,
+            width="stretch",
             height=min(38 * (n + 1), 700),
         )
         st.download_button(
@@ -188,7 +188,7 @@ with tab4:
     )
     fig.update_yaxes(autorange="reversed")
     fig.update_layout(height=520, margin=dict(l=0, r=0, t=10, b=0))
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
     solid = int((stability.head(10)["pct_top10"] >= 80).sum())
     st.markdown(f"**{solid} of your Top 10** stay in the Top 10 in at least 80% of the nudges.")
     st.dataframe(
@@ -198,5 +198,5 @@ with tab4:
                          "pct_top20": "% in Top 20", "pct_top50": "% in Top 50"})
         .style.format({"Median rank": "{:.0f}", "Best (p5)": "{:.0f}", "Worst (p95)": "{:.0f}",
                        "% in Top 10": "{:.0f}", "% in Top 20": "{:.0f}", "% in Top 50": "{:.0f}"}),
-        hide_index=True, use_container_width=True,
+        hide_index=True, width="stretch",
     )

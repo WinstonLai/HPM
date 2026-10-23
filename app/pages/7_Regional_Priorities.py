@@ -74,7 +74,7 @@ if not has_hpm_list:
     show = show.drop(columns=["Existing HPMs"])
 st.dataframe(
     show.style.format({"Avg HPM Index": "{:.1f}", "Avg Supply": "{:.1f}", "Avg Demand": "{:.1f}"}),
-    hide_index=True, use_container_width=True,
+    hide_index=True, width="stretch",
 )
 st.caption(
     "**Priority malls** = Pioneer HPM or Strategic Investment (high demand) that are not already a "
@@ -95,7 +95,7 @@ fig = px.bar(
     labels={group_col: group_label, "quadrant": "Quadrant"},
 )
 fig.update_layout(height=380, margin=dict(l=0, r=0, t=10, b=0), legend=dict(orientation="h", y=-0.25))
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width="stretch")
 
 # --------------------------------------------------------------------------------
 st.header("2. Chain vs independent landlords")
@@ -114,14 +114,14 @@ by_group = by_group.reindex(order).dropna(how="all")
 by_group = by_group.rename(columns={
     "hpm_index": "HPM Index", "supply_score": "Supply", "demand_score": "Demand", **scoring.CATEGORY_LABELS,
 })
-st.dataframe(by_group.style.format("{:.1f}", subset=by_group.columns[1:]), use_container_width=True)
+st.dataframe(by_group.style.format("{:.1f}", subset=by_group.columns[1:]), width="stretch")
 
 df["hover_label"] = df["name"].map(escape_html)    # Plotly hover text is pseudo-HTML
 box = px.box(df, x="landlord_group", y="hpm_index", category_orders={"landlord_group": order},
              points="all", hover_name="hover_label",
              labels={"landlord_group": "", "hpm_index": "HPM Index"})
 box.update_layout(height=360, margin=dict(l=0, r=0, t=10, b=0))
-st.plotly_chart(box, use_container_width=True)
+st.plotly_chart(box, width="stretch")
 st.caption(
     f"A landlord was identified for {len(known)} of {len(df)} malls. **\"Unknown landlord\" does not mean "
     "independent** — it means Wikipedia did not name one — so read the comparison as indicative only. "
@@ -151,7 +151,7 @@ else:
         .rename(columns={"rank": "Rank", "name": "Mall", "region": "Region", "hpm_index": "HPM Index",
                          "supply_score": "Supply", "demand_score": "Demand", "tier": "Tier"})
         .style.format({"HPM Index": "{:.1f}", "Supply": "{:.1f}", "Demand": "{:.1f}"}),
-        hide_index=True, use_container_width=True,
+        hide_index=True, width="stretch",
     )
     st.caption("An AUC well above 0.5 supports the index; near 0.5 means it does not recognise HPB's existing choices.")
 
@@ -164,7 +164,7 @@ else:
     bar.add_vline(x=0.5, line_dash="dash", line_color="gray", annotation_text="chance")
     bar.update_yaxes(autorange="reversed")
     bar.update_layout(height=420, margin=dict(l=0, r=0, t=10, b=0))
-    st.plotly_chart(bar, use_container_width=True)
+    st.plotly_chart(bar, width="stretch")
     st.caption(
         "**Read with care.** This asks whether the index *resembles* HPB's existing choices, not whether it "
         "predicts readiness. Healthy Dining is built from HPB's own Healthier Dining datasets, so malls that "
@@ -182,7 +182,7 @@ st.dataframe(
                      "hpm_index": "HPM Index", "supply_score": "Supply", "demand_score": "Demand",
                      "quadrant": "Quadrant"})
     .style.format({"HPM Index": "{:.1f}", "Supply": "{:.1f}", "Demand": "{:.1f}"}),
-    hide_index=True, use_container_width=True,
+    hide_index=True, width="stretch",
 )
 st.caption(
     "A starting shortlist for HPB engagement: malls the index ranks highest that are not on the existing-HPM "

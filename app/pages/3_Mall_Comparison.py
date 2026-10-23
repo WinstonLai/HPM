@@ -58,7 +58,7 @@ fig.update_layout(
     height=550,
     legend=dict(orientation="h", yanchor="bottom", y=-0.15),
 )
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width="stretch")
 st.caption("The dotted grey line is the median mall: a score outside it is better than the typical mall.")
 
 st.divider()
@@ -105,6 +105,6 @@ raw = pd.DataFrame({label: subset.loc[names, col].map("{:,.0f}".format)
                     for label, col in RAW.items() if col in subset.columns}).T
 raw.columns = names
 raw.loc["Landlord"] = subset.loc[names, "operator"].values
-st.dataframe(raw, use_container_width=True)
+st.dataframe(raw, width="stretch")
 st.caption("The raw numbers each 0–100 score is built from. Counts are for the whole mall's surroundings, "
            "not a per-store measure.")
