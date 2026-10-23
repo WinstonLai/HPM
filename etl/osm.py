@@ -16,9 +16,10 @@ from pathlib import Path
 import requests
 
 from datagovsg import is_valid_download, write_validated
+from useragent import user_agent
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
-HEADERS = {"User-Agent": "HPM-readiness-poc/1.0 (contact: hpb-cip-poc)"}
+HEADERS = {"User-Agent": user_agent()}
 RAW_DIR = Path(__file__).resolve().parent.parent / "data" / "raw"
 SG_AREA = 'area["ISO3166-1"="SG"][admin_level=2]->.sg;'
 

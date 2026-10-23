@@ -41,7 +41,6 @@ import provenance  # noqa: E402
 import validate  # noqa: E402
 
 PROCESSED_DIR = Path(__file__).resolve().parent.parent / "data" / "processed"
-PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
 ON_SITE_RADIUS_M = 200
 NEARBY_RADIUS_M = 500
@@ -770,6 +769,7 @@ def build_category_scores(allow_missing: bool = False) -> pd.DataFrame:
     write_matching_qa()
     validate.enforce("scores", *validate.validate_scores(out, len(malls), allow_constant=allow_missing))
 
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     out_path = PROCESSED_DIR / "category_scores.csv"
     out.to_csv(out_path, index=False)
     record_provenance(malls)

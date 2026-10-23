@@ -51,15 +51,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from geo import haversine_m  # noqa: E402
 from onemap import geocode_candidates, geocode_validated, name_tokens  # noqa: E402
 import validate  # noqa: E402
+from useragent import user_agent  # noqa: E402
 
 WIKI_API = "https://en.wikipedia.org/w/api.php"
 LIST_PAGE = "List_of_shopping_malls_in_Singapore"
 CATEGORY_TITLE = "Category:Shopping malls in Singapore"
 COMMERCIAL_SITES_PAGE = "List_of_commercial_sites_in_Singapore"
-HEADERS = {"User-Agent": "HPM-readiness-poc/1.0 (contact: hpb-cip-poc)"}
+HEADERS = {"User-Agent": user_agent()}
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROCESSED_DIR = REPO_ROOT / "data" / "processed"
-PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 MANUAL_DIR = REPO_ROOT / "data" / "manual"
 
 # Post-geocode duplicate detection.
@@ -597,6 +597,7 @@ def build_registry(limit: int | None = None, sleep_s: float = 0.3) -> pd.DataFra
     df["postal_code"] = df["postal_code"].astype("string")
 
     validate.enforce("registry", *validate.validate_registry(df))
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(qa, columns=["kind", "name", "detail"]).to_csv(PROCESSED_DIR / "registry_qa.csv", index=False)
     return df[["mall_id", "name", "aliases", "type", "region", "operator", "hpb_partner",
                "lat", "lon", "postal_code", "address"]].reset_index(drop=True)
@@ -688,6 +689,7 @@ if __name__ == "__main__":
         raise SystemExit(0)
 
     df = build_registry(limit=args.limit)
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     out_path = PROCESSED_DIR / "malls.csv"
     df.to_csv(out_path, index=False)
     print(f"\nWrote {len(df)} malls to {out_path}")
