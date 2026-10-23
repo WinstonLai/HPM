@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 import data_loader  # noqa: E402
 import scoring  # noqa: E402
 import weights  # noqa: E402
+from safe_text import to_csv_bytes  # noqa: E402
 
 st.set_page_config(page_title="National Ranking | HPM Dashboard", page_icon="📋", layout="wide")
 st.title("📋 National Ranking")
@@ -80,7 +81,7 @@ column_config = {labels[c]: bar(labels[c]) for c in
                  ["hpm_index", "supply_score", "demand_score"] + (list(scoring.CATEGORY_LABELS) if show_categories else [])}
 st.dataframe(table, hide_index=True, use_container_width=True, height=650, column_config=column_config)
 
-st.download_button("Download this table (CSV)", table.to_csv(index=False).encode("utf-8"),
+st.download_button("Download this table (CSV)", to_csv_bytes(table),
                    file_name="hpm_ranking.csv", mime="text/csv")
 st.caption(
     "**Catchment**: *Daytime-led* means the area within ~2km has more workers than residents "

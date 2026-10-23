@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 import data_loader  # noqa: E402
 import scoring  # noqa: E402
 import weights  # noqa: E402
+from safe_text import escape_html  # noqa: E402
 
 st.set_page_config(page_title="HPM Readiness Dashboard", page_icon="🛍️", layout="wide")
 
@@ -83,6 +84,7 @@ op_summary = (
     .head(10)
     .reset_index()
 )
+op_summary["operator"] = op_summary["operator"].map(escape_html)    # Plotly axis labels are pseudo-HTML
 if op_summary.empty:
     st.info("No operator data could be resolved from Wikipedia infoboxes for this run.")
 else:

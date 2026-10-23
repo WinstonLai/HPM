@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 import data_loader  # noqa: E402
 import scoring  # noqa: E402
 import weights  # noqa: E402
+from safe_text import escape_html, escape_md  # noqa: E402
 
 st.set_page_config(page_title="Mall Comparison | HPM Dashboard", page_icon="🕸️", layout="wide")
 st.title("🕸️ Mall Comparison")
@@ -50,7 +51,7 @@ for name in names:
     row = subset.loc[name]
     values = [None if pd.isna(row[c]) else row[c] for c in RADAR_COLS]  # n/a factors leave a gap
     fig.add_trace(go.Scatterpolar(
-        r=values + [values[0]], theta=theta + [theta[0]], fill="toself", opacity=0.55, name=name,
+        r=values + [values[0]], theta=theta + [theta[0]], fill="toself", opacity=0.55, name=escape_html(name),
     ))
 fig.update_layout(
     polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
@@ -78,7 +79,7 @@ for col, name in zip(cols, names):
     best = max(eligible, key=eligible.get)
     worst = min(eligible, key=eligible.get)
     with col:
-        st.markdown(f"**{name}**")
+        st.markdown(f"**{escape_md(name)}**")
         st.metric("HPM Index", f"{row['hpm_index']:.1f}", help=f"Rank {int(row['rank'])} · Tier: {row['tier']}")
         st.success(f"Strongest: {LABELS[best]} — better than {eligible[best]:.0f}% of malls")
         st.warning(f"Weakest: {LABELS[worst]} — better than {eligible[worst]:.0f}% of malls")

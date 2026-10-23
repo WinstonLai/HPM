@@ -1,0 +1,186 @@
+{
+  "category_scores": {
+    "built_at": "2026-10-23T04:43:15+00:00",
+    "git_commit": "aaff253",
+    "n_malls": 51,
+    "parameters": {
+      "bus_radius_m": 400,
+      "catchment_radius_m": 1200,
+      "name_match_max_m": 500,
+      "nearby_radius_m": 500,
+      "on_site_radius_m": 200,
+      "osm_dedupe_m": 40,
+      "park_facility_classes": [
+        "DRINKING FOUNTAIN",
+        "FITNESS AREA",
+        "FOOT RELAX",
+        "PLAYGROUND"
+      ],
+      "reach_kernel_radius_m": 2000,
+      "winsor_quantile": 0.95
+    }
+  },
+  "index": {
+    "built_at": "2026-10-23T04:43:15+00:00",
+    "demand_block_weight": 30,
+    "demand_weights": {
+      "accessibility_score": 33.33,
+      "engagement_gap_score": 33.33,
+      "reach_population_score": 33.33
+    },
+    "git_commit": "aaff253",
+    "n_malls": 51,
+    "supply_block_weight": 70,
+    "supply_weights": {
+      "A_dining_score": 31.25,
+      "B_fitness_score": 25.0,
+      "C_engagement_score": 12.5,
+      "D_healthcare_score": 12.5,
+      "E_infra_score": 12.5,
+      "F_partnership_score": 6.25
+    },
+    "tier_thresholds": {
+      "Gold": 35.0,
+      "Platinum": 50.0,
+      "Silver": 20.0
+    },
+    "top10": [
+      "Nex",
+      "AMK Hub",
+      "Jurong Point",
+      "Eastpoint Mall",
+      "Waterway Point",
+      "White Sands",
+      "Hillion Mall",
+      "Compass One",
+      "Junction 8",
+      "Tiong Bahru Plaza"
+    ]
+  },
+  "raw_data": {
+    "built_at": "2026-10-23T04:43:15+00:00",
+    "files": {
+      "bicycle_racks.geojson": {
+        "bytes": 240638,
+        "fetched": "2026-10-23T04:40:54+00:00",
+        "rows": 396,
+        "sha256": "a9b25aa7000eb306"
+      },
+      "bus_stops.geojson": {
+        "bytes": 1886647,
+        "fetched": "2026-10-23T04:41:46+00:00",
+        "rows": 5205,
+        "sha256": "ea16db2e53038b2b"
+      },
+      "chas_clinics.geojson": {
+        "bytes": 1644760,
+        "fetched": "2026-10-23T04:40:02+00:00",
+        "rows": 1193,
+        "sha256": "d25ed5c5b460d2c1"
+      },
+      "community_clubs.geojson": {
+        "bytes": 93712,
+        "fetched": "2026-10-23T04:39:49+00:00",
+        "rows": 128,
+        "sha256": "e35b4088313258e8"
+      },
+      "gyms_at_sg.geojson": {
+        "bytes": 212034,
+        "fetched": "2026-10-23T04:39:23+00:00",
+        "rows": 159,
+        "sha256": "2d5de3b1d0d590d2"
+      },
+      "healthier_dining_fnb_partners.csv": {
+        "bytes": 704705,
+        "fetched": "2026-10-23T04:38:57+00:00",
+        "rows": 3799,
+        "sha256": "2052ef28572d39c3"
+      },
+      "healthier_eateries.geojson": {
+        "bytes": 1467826,
+        "fetched": "2026-10-23T04:38:45+00:00",
+        "rows": 1829,
+        "sha256": "0611cdc814a4e8a3"
+      },
+      "licensed_pharmacies.csv": {
+        "bytes": 27890,
+        "fetched": "2026-10-23T04:40:15+00:00",
+        "rows": 243,
+        "sha256": "091dd08bf033d254"
+      },
+      "mrt_station_exits.geojson": {
+        "bytes": 213480,
+        "fetched": "2026-10-23T04:41:33+00:00",
+        "rows": 613,
+        "sha256": "7a57cb14cf7c6212"
+      },
+      "osm_fitness.geojson": {
+        "bytes": 103121,
+        "fetched": "2026-10-23T04:42:44+00:00",
+        "rows": 507,
+        "sha256": "e776c7f6ffb85d71"
+      },
+      "osm_fnb.geojson": {
+        "bytes": 1766530,
+        "fetched": "2026-10-23T04:43:14+00:00",
+        "rows": 8836,
+        "sha256": "36788cef9670d8e9"
+      },
+      "park_facilities.geojson": {
+        "bytes": 6091834,
+        "fetched": "2026-10-23T04:40:42+00:00",
+        "rows": 14754,
+        "sha256": "2f26adbd105ebdaf"
+      },
+      "parks_at_sg.geojson": {
+        "bytes": 79121,
+        "fetched": "2026-10-23T04:40:28+00:00",
+        "rows": 52,
+        "sha256": "ed79ce4bcc12929b"
+      },
+      "resident_population_2020.csv": {
+        "bytes": 85943,
+        "fetched": "2026-10-23T04:41:07+00:00",
+        "rows": 388,
+        "sha256": "9d1183c4335a8189"
+      },
+      "sportsg_sport_facilities.geojson": {
+        "bytes": 22526,
+        "fetched": "2026-10-23T04:39:36+00:00",
+        "rows": 45,
+        "sha256": "51dc45c1fcc09fc0"
+      },
+      "subzone_boundary.geojson": {
+        "bytes": 3180569,
+        "fetched": "2026-10-23T04:41:20+00:00",
+        "rows": 332,
+        "sha256": "77e30aa02b1784b6"
+      },
+      "supermarket_licences.csv": {
+        "bytes": 42172,
+        "fetched": "2026-10-23T04:39:10+00:00",
+        "rows": 478,
+        "sha256": "a588eab004ba927a"
+      },
+      "workers_by_workplace_pa_2020.csv": {
+        "bytes": 9252,
+        "fetched": "2026-10-23T04:41:59+00:00",
+        "rows": 48,
+        "sha256": "d5053b464e12f62e"
+      }
+    },
+    "git_commit": "aaff253",
+    "latest_fetch": "2026-10-23T04:43:14+00:00"
+  },
+  "registry": {
+    "built_at": "2026-10-23T04:43:15+00:00",
+    "git_commit": "aaff253",
+    "n_malls": 51,
+    "qa_events": {
+      "existing_hpm_added": 46
+    },
+    "types": {
+      "Shopping mall": 51
+    }
+  }
+}

@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 import data_loader  # noqa: E402
 import scoring  # noqa: E402
 import weights  # noqa: E402
+from safe_text import to_csv_bytes  # noqa: E402
 
 st.set_page_config(page_title="What-If Simulator | HPM Dashboard", page_icon="🎚️", layout="wide")
 st.title("🎚️ What-If Simulator")
@@ -152,7 +153,7 @@ for tab, n in zip((tab1, tab2, tab3), (10, 20, 50)):
             height=min(38 * (n + 1), 700),
         )
         st.download_button(
-            f"Download Top {n} (CSV)", shortlist.to_csv(index=False).encode("utf-8"),
+            f"Download Top {n} (CSV)", to_csv_bytes(shortlist),
             file_name=f"hpm_top{n}.csv", mime="text/csv", key=f"dl_top{n}",
         )
 

@@ -90,6 +90,21 @@ _NAME_GENERIC = {"mall", "centre", "center", "shopping", "plaza", "complex", "bu
                  "town", "square", "point", "city", "hub", "place"}
 
 
+_HTML_TAG_RE = re.compile(r"<[^>]*>")
+_MARKUP_CHARS_RE = re.compile(r"[<>\[\]{}|]")
+
+
+def sanitize_text(text: str) -> str:
+    """Plain text from a scraped fragment: wikitext (refs, templates, links, bold/italic quotes)
+    and HTML are removed, and any leftover markup characters dropped, so no later stage
+    has to treat a mall name or landlord as anything but text."""
+    text = REF_STRIP_RE.sub("", text or "")
+    text = TEMPLATE_STRIP_RE.sub("", text)
+    text = WIKILINK_STRIP_RE.sub(r"\1", text)
+    text = _HTML_TAG_RE.sub("", text).replace("''", "")
+    return re.sub(r"\s+", " ", _MARKUP_CHARS_RE.sub("", text)).strip()
+
+
 def clean_name(name: str) -> str:
     """Strip Wikipedia disambiguation noise: "Funan, Singapore" -> "Funan",
     "IMM (Singapore)" -> "IMM"."""
@@ -232,6 +247,9 @@ def scrape_mall_list() -> pd.DataFrame:
     seen: set[str] = set()
     kept: list[dict] = []
     for row in all_rows:
+        row["name"] = sanitize_text(row["name"])    # page_title is left alone: it is only used to fetch the article
+        if not row["name"]:
+            continue
         keys = {k for k in (dedupe_key(row["page_title"]), dedupe_key(row["name"])) if k}
         if not keys or keys & seen:
             continue
@@ -281,7 +299,7 @@ def extract_operator(wikitext: str) -> str:
         value = TEMPLATE_STRIP_RE.sub("", value)
         value = WIKILINK_STRIP_RE.sub(r"\1", value)
         value = value.split("<br")[0].split("*")[0]
-        value = value.strip(" '\"\t")
+        value = sanitize_text(value).strip(" '\"\t")
         if value and field not in found:
             found[field] = value
     for field in OPERATOR_FIELD_PRIORITY:

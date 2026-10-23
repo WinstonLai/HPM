@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 import data_loader  # noqa: E402
 import scoring  # noqa: E402
 import weights  # noqa: E402
+from safe_text import escape_html  # noqa: E402
 
 st.set_page_config(page_title="Regional Priorities | HPM Dashboard", page_icon="📍", layout="wide")
 st.title("📍 Regional Priorities")
@@ -115,8 +116,9 @@ by_group = by_group.rename(columns={
 })
 st.dataframe(by_group.style.format("{:.1f}", subset=by_group.columns[1:]), use_container_width=True)
 
+df["hover_label"] = df["name"].map(escape_html)    # Plotly hover text is pseudo-HTML
 box = px.box(df, x="landlord_group", y="hpm_index", category_orders={"landlord_group": order},
-             points="all", hover_name="name",
+             points="all", hover_name="hover_label",
              labels={"landlord_group": "", "hpm_index": "HPM Index"})
 box.update_layout(height=360, margin=dict(l=0, r=0, t=10, b=0))
 st.plotly_chart(box, use_container_width=True)
