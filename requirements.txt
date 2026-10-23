@@ -1,8 +1,8 @@
-streamlit>=1.38
-pandas>=2.2
-numpy>=1.26
-requests>=2.31
-beautifulsoup4>=4.12
-lxml>=5.2
-plotly>=5.22
-pydeck>=0.9
+# Direct dependencies, bounded to the major versions the code is tested against.
+# For a reproducible install use the fully pinned requirements.lock instead.
+streamlit>=1.64,<2
+pandas>=3.0,<4
+numpy>=2.4,<3
+requests>=2.34,<3
+plotly>=7.1,<8
+pydeck>=0.9,<1

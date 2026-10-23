@@ -20,7 +20,7 @@ Demand Opportunity = Reach & Population + Accessibility + Engagement Gap
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt        # bounded ranges; use requirements.lock for exact pinned versions
 
 # Full ETL rebuild (one-off, ~10-15 min: Wikipedia scrape + OneMap geocoding +
 # throttled data.gov.sg downloads). Re-run any time to refresh the data.
