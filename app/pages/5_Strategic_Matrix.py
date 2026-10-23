@@ -94,7 +94,7 @@ fig.add_hline(y=supply_cut, line_dash="dash", line_color="gray")
 fig.update_xaxes(range=[0, x_max])
 fig.update_yaxes(range=[0, y_max])
 fig.update_layout(height=680, legend=dict(orientation="h", yanchor="bottom", y=-0.25))
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width="stretch")
 st.caption(
     f"Split at Demand {demand_cut:.1f} and Supply {supply_cut:.1f} "
     f"({'the median of each axis' if mode.startswith('Median') else 'fixed scores you chose'}). "
@@ -123,6 +123,6 @@ table = subset[["rank", "name", "region", "operator", "supply_score", "demand_sc
     columns={"rank": "Rank", "name": "Mall", "region": "Region", "operator": "Operator",
              "supply_score": "Supply", "demand_score": "Demand", "hpm_index": "HPM Index"})
 st.dataframe(table.style.format({"Supply": "{:.1f}", "Demand": "{:.1f}", "HPM Index": "{:.1f}"}),
-             hide_index=True, use_container_width=True)
+             hide_index=True, width="stretch")
 st.download_button(f"Download {selected_quadrant} (CSV)", to_csv_bytes(table),
                    file_name=f"hpm_{selected_quadrant.lower().replace(' ', '_')}.csv", mime="text/csv")

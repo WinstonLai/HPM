@@ -200,7 +200,7 @@ with example_col1:
             "Healthy dining stores": [20, 8],
             "Total F&B stores": [100, 20],
         }),
-        hide_index=True, use_container_width=True,
+        hide_index=True, width="stretch",
     )
     st.caption("By raw count, Mall A (20) looks better than Mall B (8).")
 with example_col2:
@@ -210,7 +210,7 @@ with example_col2:
             "Mall": ["Mall A", "Mall B"],
             "% healthy dining": ["20%", "40%"],
         }),
-        hide_index=True, use_container_width=True,
+        hide_index=True, width="stretch",
     )
     st.caption("But as a *share* of what's on offer, Mall B is actually twice as health-focused.")
 
@@ -293,11 +293,11 @@ demand_table = contribution_table(scoring.DEFAULT_DEMAND_WEIGHTS)
 wcol1, wcol2 = st.columns(2)
 with wcol1:
     st.markdown("**Step A — Supply Readiness**")
-    st.dataframe(supply_table, hide_index=True, use_container_width=True)
+    st.dataframe(supply_table, hide_index=True, width="stretch")
     st.markdown(f"Sum of contributions = **Supply Score = {row['supply_score']:.1f}**")
 with wcol2:
     st.markdown("**Step B — Demand Opportunity**")
-    st.dataframe(demand_table, hide_index=True, use_container_width=True)
+    st.dataframe(demand_table, hide_index=True, width="stretch")
     st.markdown(f"Sum of contributions = **Demand Score = {row['demand_score']:.1f}**")
 
 st.markdown(f"**Step C — Combine them ({supply_pct}% Supply + {demand_pct}% Demand)**")
@@ -322,7 +322,7 @@ fig = px.bar(
     labels={"Contribution": "Points contributed to that block's score"},
 )
 fig.update_layout(height=420, margin=dict(l=0, r=0, t=10, b=0))
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width="stretch")
 
 st.caption(
     "This is the exact same calculation the What-If Simulator runs live when you move a "
@@ -413,7 +413,7 @@ coverage.append({
     "Malls with a count of 0": int((category_scores["F_partnership_score"] == 0).sum()),
     "% of malls": f"{(category_scores['F_partnership_score'] == 0).mean() * 100:.0f}%",
 })
-st.dataframe(pd.DataFrame(coverage), hide_index=True, use_container_width=True)
+st.dataframe(pd.DataFrame(coverage), hide_index=True, width="stretch")
 st.caption(
     "A zero means no matching record was found — either the mall genuinely has none, or the "
     "match failed (see below). A missing count is treated as zero; a factor that is not applicable "
@@ -478,7 +478,7 @@ other reasonable choices.
 )
 
 st.subheader("Other readings of the charter's weights")
-st.dataframe(scoring.scenario_comparison(category_scores), hide_index=True, use_container_width=True)
+st.dataframe(scoring.scenario_comparison(category_scores), hide_index=True, width="stretch")
 st.caption(
     "The charter is ambiguous: its category weights (25/20/15/10/10/10 plus Demand Potential 10) sum to "
     "100 with Supply at 90%, yet its composite formula says Supply 70% / Demand 30%. The default follows "
@@ -500,7 +500,7 @@ fig = px.scatter(
 )
 fig.update_yaxes(autorange="reversed")
 fig.update_layout(height=520, margin=dict(l=0, r=0, t=10, b=0))
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width="stretch")
 solid = int((stability.head(10)["pct_top10"] >= 80).sum())
 st.markdown(
     f"**{solid} of the default Top 10** stay in the Top 10 in at least 80% of the re-weightings; the rest "
@@ -513,7 +513,7 @@ st.dataframe(
                      "pct_top20": "% in Top 20", "pct_top50": "% in Top 50"})
     .style.format({"Median rank": "{:.0f}", "Best (p5)": "{:.0f}", "Worst (p95)": "{:.0f}",
                    "% in Top 10": "{:.0f}", "% in Top 20": "{:.0f}", "% in Top 50": "{:.0f}"}),
-    hide_index=True, use_container_width=True,
+    hide_index=True, width="stretch",
 )
 
 weights = scoring.DEFAULT_SUPPLY_WEIGHTS
@@ -527,7 +527,7 @@ st.dataframe(
         "Nominal weight (%)": [round(nominal[k], 1) for k in weights],
         "Effective share of Supply variation (%)": [round(effective[k], 1) for k in weights],
     }),
-    hide_index=True, use_container_width=True,
+    hide_index=True, width="stretch",
 )
 st.caption(
     "A category's weight only matters in proportion to how much malls differ on it. Where the effective share "
@@ -541,7 +541,7 @@ corr = category_scores[corr_cols].rank().corr().round(2)
 corr.index = corr.columns = [scoring.CATEGORY_LABELS[c] for c in corr_cols]
 heat = px.imshow(corr, zmin=-1, zmax=1, color_continuous_scale="RdBu_r", text_auto=True, aspect="auto")
 heat.update_layout(height=520, margin=dict(l=0, r=0, t=10, b=0))
-st.plotly_chart(heat, use_container_width=True)
+st.plotly_chart(heat, width="stretch")
 st.caption(
     "Rank correlation between categories (1 = move together, 0 = unrelated, −1 = opposite). Two categories "
     "that move together are partly measuring the same thing, so weighting both counts it twice. Engagement Gap "

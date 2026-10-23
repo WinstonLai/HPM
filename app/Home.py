@@ -62,7 +62,7 @@ with left:
                           "hpm_index": "HPM Index", "tier": "Tier", "rank": "Rank"})
         .style.format({"HPM Index": "{:.1f}"}),
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
     )
 
 with right:
@@ -71,7 +71,7 @@ with right:
     region_counts.columns = ["Region", "Malls"]
     fig = px.bar(region_counts, x="Region", y="Malls", color="Region")
     fig.update_layout(showlegend=False, margin=dict(l=0, r=0, t=10, b=0), height=300)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 st.divider()
 
@@ -97,7 +97,7 @@ else:
         labels={"operator": "Operator", "malls": "Number of Malls", "avg_index": "Avg HPM Index"},
     )
     fig2.update_layout(margin=dict(l=0, r=0, t=10, b=0), height=350)
-    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig2, width="stretch")
     st.caption(
         "Operator identified via each mall's Wikipedia infobox (owner/developer/management field); "
         "malls with no resolvable field are excluded here and labelled 'Unknown' elsewhere."
