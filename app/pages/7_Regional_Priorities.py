@@ -1,4 +1,4 @@
-"""Page 8 - Regional Priorities: where should HPB expand next, how do chain
+"""Regional Priorities: where should HPB expand next, how do chain
 and independent landlords compare, and does the index recognise the malls that
 are already Health Promoting Malls? (Charter objectives: "identify regions that
 should be prioritised for HPM expansion", "differences across mall chains and

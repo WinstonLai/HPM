@@ -1,4 +1,4 @@
-"""Page 4 - Mall Comparison: up to 5 malls, radar chart, strengths/weaknesses."""
+"""Mall Comparison: up to 5 malls, radar chart, strengths/weaknesses."""
 from __future__ import annotations
 
 import sys
