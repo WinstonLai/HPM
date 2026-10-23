@@ -24,7 +24,6 @@ import requests
 
 BASE_URL = "https://api-open.data.gov.sg/v1/public/api/datasets"
 RAW_DIR = Path(__file__).resolve().parent.parent / "data" / "raw"
-RAW_DIR.mkdir(parents=True, exist_ok=True)
 
 MIN_SECONDS_BETWEEN_CALLS = 13.0  # keep under data.gov.sg's 5 req/min unauth limit
 
@@ -102,6 +101,7 @@ def write_validated(dest: Path, write_tmp) -> None:
     """Write `dest` atomically: `write_tmp(tmp_path)` fills a sibling file that is
     validated and then renamed over `dest`, so a crash or a bad response can never
     leave a partial file that later runs would trust as a cache hit."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_name(f"{dest.stem}.part{dest.suffix}")
     try:
         write_tmp(tmp)

@@ -45,6 +45,7 @@ def main() -> None:
             out_dir.resolve(), build_category_scores, build_index, build_mall_registry)
         print(f"Writing processed CSVs to {processed_dir} (not data/processed/)")
 
+    processed_dir.mkdir(parents=True, exist_ok=True)
     malls_path = processed_dir / "malls.csv"
     if args.force or not malls_path.exists():
         print("=== Step 1/4: mall registry ===")
