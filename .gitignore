@@ -5,3 +5,4 @@ data/raw/
 .streamlit/secrets.toml
 .DS_Store
 Health Promoting Mall Readiness Assessment Project Charter*.docx
+data/processed_limited/

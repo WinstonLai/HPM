@@ -51,7 +51,10 @@ DATASETS: dict[str, list[tuple[str, str, str]]] = {
 }
 
 
-def download_all(force: bool = False) -> None:
+def download_all(force: bool = False) -> list[str]:
+    """Fetch every dataset; returns the filenames that failed, so the caller can
+    stop instead of scoring a category from a missing file as all zeros."""
+    failed: list[str] = []
     for category, items in DATASETS.items():
         for dataset_id, filename, publisher in items:
             print(f"[{category}] fetching {filename} ({publisher}) ...")
@@ -60,9 +63,11 @@ def download_all(force: bool = False) -> None:
                 print(f"  -> {path} ({path.stat().st_size / 1024:.0f} KB)")
             except Exception as exc:  # noqa: BLE001
                 print(f"  [error] {filename}: {exc}")
+                failed.append(filename)
     # Not on data.gov.sg: OpenStreetMap extracts (commercial fitness venues,
     # F&B outlets) via Overpass.
-    osm.download_all(force=force)
+    failed += osm.download_all(force=force)
+    return failed
 
 
 if __name__ == "__main__":
@@ -71,4 +76,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--force", action="store_true", help="re-download even if cached")
     args = parser.parse_args()
-    download_all(force=args.force)
+    failed = download_all(force=args.force)
+    if failed:
+        sys.exit(f"{len(failed)} download(s) failed: {', '.join(failed)}")

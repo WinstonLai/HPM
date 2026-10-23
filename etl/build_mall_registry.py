@@ -600,6 +600,11 @@ if __name__ == "__main__":
                              "are missing from the current malls.csv, and exit")
     args = parser.parse_args()
 
+    if args.limit:   # a partial registry must not replace the committed one
+        import provenance
+        out = provenance.redirect_processed_dir(provenance.SCRATCH_DIR, sys.modules[__name__])
+        print(f"--limit run: writing to {out} (not data/processed/)")
+
     if args.dedupe:
         current = pd.read_csv(PROCESSED_DIR / "malls.csv", dtype={"postal_code": str})
         current["aliases"] = current["aliases"].fillna("")

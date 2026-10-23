@@ -64,9 +64,13 @@ def test_scores_errors():
     assert any("negative counts" in e for e in validate.validate_scores(df, 3)[0])
 
 
-def test_a_constant_score_column_is_flagged():
-    df = good_scores().assign(B_fitness_score=0.0)
-    assert any("constant" in w for w in validate.validate_scores(df, 3)[1])
+def test_a_constant_score_column_is_an_error_unless_allowed():
+    n = 40
+    df = pd.DataFrame({"A_dining_score": np.linspace(0, 100, n), "engagement_gap_score": np.linspace(0, 100, n),
+                       "B_fitness_score": 0.0})
+    assert any("constant" in e for e in validate.validate_scores(df, n)[0])
+    errors, warnings = validate.validate_scores(df, n, allow_constant=True)
+    assert errors == [] and any("constant" in w for w in warnings)
 
 
 def test_index_errors():

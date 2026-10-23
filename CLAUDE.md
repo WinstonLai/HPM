@@ -26,10 +26,13 @@ pip install -r requirements.txt
 # throttled data.gov.sg downloads). Re-run any time to refresh the data.
 python etl/run_all.py
 python etl/run_all.py --force          # re-download/re-scrape even if cached
-python etl/run_all.py --limit 10       # cap mall count, for a fast debug run
+python etl/run_all.py --limit 10       # cap mall count, for a fast debug run; writes to
+                                       # data/processed_limited/ (gitignored), never data/processed/
+python etl/run_all.py --allow-missing  # carry on past a failed download (default: stop, since a
+                                       # missing dataset would otherwise score its category as 0)
 
 # Individual ETL stages (each reads/writes data/{raw,processed}/, safe to run alone)
-python etl/build_mall_registry.py [--limit N]   # -> data/processed/malls.csv
+python etl/build_mall_registry.py [--limit N]   # -> data/processed/malls.csv (--limit: data/processed_limited/)
 python etl/build_amenities.py [--force]         # -> data/raw/*.geojson|csv
 python etl/build_category_scores.py             # -> data/processed/category_scores.csv
 python etl/build_index.py                       # -> data/processed/hpm_index.csv
