@@ -57,7 +57,9 @@ def validate_registry(malls: pd.DataFrame) -> tuple[list[str], list[str]]:
     return errors, warnings
 
 
-def validate_scores(scores: pd.DataFrame, n_malls: int) -> tuple[list[str], list[str]]:
+def validate_scores(scores: pd.DataFrame, n_malls: int, allow_constant: bool = False) -> tuple[list[str], list[str]]:
+    """A constant score column almost always means its source file failed to load,
+    so it is an error unless `allow_constant` (e.g. a deliberate partial run)."""
     errors: list[str] = []
     warnings: list[str] = []
     if len(scores) != n_malls:
@@ -79,7 +81,8 @@ def validate_scores(scores: pd.DataFrame, n_malls: int) -> tuple[list[str], list
         errors.append(f"negative counts in {neg}")
     for col in score_cols:
         if col != "engagement_gap_score" and scores[col].nunique() <= 1:
-            warnings.append(f"{col} is constant: its source data probably failed to load")
+            msg = f"{col} is constant: its source data probably failed to load"
+            (warnings if allow_constant else errors).append(msg)
     return errors, warnings
 
 

@@ -50,6 +50,22 @@ def _rebalance(changed_key: str, group_keys: list[str]) -> None:
     st.session_state[others[-1]] = max(0, remaining - allocated)
 
 
+def _order_tiers(changed: str) -> None:
+    """on_change callback: keep Silver <= Gold <= Platinum by pushing the other
+    cut-offs along with the one the user moved, so the sliders always show the
+    values that are actually used."""
+    s = st.session_state
+    if changed == "Platinum":
+        s["tier_Gold"] = min(s["tier_Gold"], s["tier_Platinum"])
+        s["tier_Silver"] = min(s["tier_Silver"], s["tier_Gold"])
+    elif changed == "Gold":
+        s["tier_Platinum"] = max(s["tier_Platinum"], s["tier_Gold"])
+        s["tier_Silver"] = min(s["tier_Silver"], s["tier_Gold"])
+    else:
+        s["tier_Gold"] = max(s["tier_Gold"], s["tier_Silver"])
+        s["tier_Platinum"] = max(s["tier_Platinum"], s["tier_Gold"])
+
+
 def linked_weight_sliders(group_keys: list[str], initial: dict, key_prefix: str) -> dict:
     """Render a group of sliders that always sum to 100: moving one
     proportionally redistributes the remaining budget across the rest. Slider
@@ -101,14 +117,10 @@ with st.sidebar:
     for name in ("Platinum", "Gold", "Silver"):
         if f"tier_{name}" not in st.session_state:
             st.session_state[f"tier_{name}"] = int(saved["tiers"][name])
-    st.slider("Platinum ≥", 0, 100, key="tier_Platinum")
-    st.slider("Gold ≥", 0, 100, key="tier_Gold")
-    st.slider("Silver ≥", 0, 100, key="tier_Silver")
-    # Keep the bands ordered: Silver <= Gold <= Platinum.
-    plat = st.session_state["tier_Platinum"]
-    gold = min(st.session_state["tier_Gold"], plat)
-    silver = min(st.session_state["tier_Silver"], gold)
-    tier_thresholds = {"Platinum": int(plat), "Gold": int(gold), "Silver": int(silver)}
+    st.slider("Platinum ≥", 0, 100, key="tier_Platinum", on_change=_order_tiers, args=("Platinum",))
+    st.slider("Gold ≥", 0, 100, key="tier_Gold", on_change=_order_tiers, args=("Gold",))
+    st.slider("Silver ≥", 0, 100, key="tier_Silver", on_change=_order_tiers, args=("Silver",))
+    tier_thresholds = {name: int(st.session_state[f"tier_{name}"]) for name in ("Platinum", "Gold", "Silver")}
 
 settings = {"supply": supply_sliders, "demand": demand_sliders, "supply_block": supply_block_weight,
             "exclude_proxies": exclude_proxy_categories, "tiers": tier_thresholds}

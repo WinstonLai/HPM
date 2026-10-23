@@ -78,3 +78,18 @@ def update_meta(section: str, info: dict) -> None:
     meta[section] = {"built_at": now_iso(), "git_commit": git_commit(), **info}
     META_PATH.parent.mkdir(parents=True, exist_ok=True)
     META_PATH.write_text(json.dumps(meta, indent=2, sort_keys=True, default=str) + "\n")
+
+
+SCRATCH_DIR = REPO_ROOT / "data" / "processed_limited"
+
+
+def redirect_processed_dir(path: Path, *modules) -> Path:
+    """Send every stage's output to `path` instead of data/processed/ by repointing
+    the PROCESSED_DIR each stage module (and this one) reads at call time. Used by
+    debug runs (--limit), which must not overwrite the committed CSVs."""
+    global PROCESSED_DIR, META_PATH
+    path.mkdir(parents=True, exist_ok=True)
+    PROCESSED_DIR, META_PATH = path, path / "_meta.json"
+    for module in modules:
+        module.PROCESSED_DIR = path
+    return path

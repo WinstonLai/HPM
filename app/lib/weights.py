@@ -99,7 +99,12 @@ def load_index() -> tuple[pd.DataFrame, bool]:
     settings = get_settings()
     if settings is None:
         return data_loader.load_default_index(), False
-    return compute(data_loader.load_category_scores(), settings), True
+    try:
+        return compute(data_loader.load_category_scores(), settings), True
+    except Exception as exc:  # noqa: BLE001 -- never leave every page unusable behind bad saved settings
+        reset()
+        st.warning(f"Your custom weights could not be applied ({exc}), so they were reset to the defaults.")
+        return data_loader.load_default_index(), False
 
 
 def show_banner(key: str) -> None:

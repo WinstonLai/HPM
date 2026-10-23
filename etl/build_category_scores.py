@@ -552,7 +552,8 @@ def compute_untapped_demand(malls: pd.DataFrame, pop_catchment: np.ndarray,
     is NaN ("n/a") and the index re-weights over that mall's remaining
     Demand factors instead of treating it as a hard zero. Community clubs
     (Category C) are intentionally excluded -- see the call site."""
-    pts = pd.concat([p[["lat", "lon"]] for p in point_sets if not p.empty], ignore_index=True)
+    frames = [p[["lat", "lon"]] for p in point_sets if not p.empty]
+    pts = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["lat", "lon"])
     amenities = count_nearby(malls, pts, CATCHMENT_RADIUS_M)
     pop = np.asarray(pop_catchment, dtype=float)
     has_pop = pop > 0
@@ -626,10 +627,10 @@ def write_matching_qa() -> None:
         print("  [qa] no name-matched amenity lies >%dm from its mall" % NAME_MATCH_MAX_M)
     else:
         print(f"  [qa] {qa['mall'].nunique()} malls have name-matched amenities >{NAME_MATCH_MAX_M}m away "
-              "(possible bad geocode) -- see data/processed/matching_qa.csv")
+              f"(possible bad geocode) -- see {PROCESSED_DIR / 'matching_qa.csv'}")
 
 
-def build_category_scores() -> pd.DataFrame:
+def build_category_scores(allow_missing: bool = False) -> pd.DataFrame:
     malls_path = PROCESSED_DIR / "malls.csv"
     malls = pd.read_csv(malls_path, dtype={"postal_code": str})
     print(f"Loaded {len(malls)} malls from {malls_path}")
@@ -767,7 +768,7 @@ def build_category_scores() -> pd.DataFrame:
     out["engagement_gap_score"] = gap
 
     write_matching_qa()
-    validate.enforce("scores", *validate.validate_scores(out, len(malls)))
+    validate.enforce("scores", *validate.validate_scores(out, len(malls), allow_constant=allow_missing))
 
     out_path = PROCESSED_DIR / "category_scores.csv"
     out.to_csv(out_path, index=False)
@@ -777,4 +778,9 @@ def build_category_scores() -> pd.DataFrame:
 
 
 if __name__ == "__main__":
-    build_category_scores()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--allow-missing", action="store_true",
+                        help="accept a score column that is constant because its raw data is missing")
+    build_category_scores(allow_missing=parser.parse_args().allow_missing)

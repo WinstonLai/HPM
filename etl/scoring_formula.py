@@ -92,10 +92,14 @@ TIER_THRESHOLDS = {"Platinum": 50.0, "Gold": 35.0, "Silver": 20.0}
 
 
 def assign_tiers(index: pd.Series, thresholds: dict | None = None) -> pd.Series:
-    """Bronze/Silver/Gold/Platinum from absolute HPM Index cut-offs."""
+    """Bronze/Silver/Gold/Platinum from absolute HPM Index cut-offs. Tied or
+    out-of-order cut-offs are allowed (the higher tier just goes unused)
+    instead of raising, since the What-If Simulator lets users drag them."""
     t = thresholds or TIER_THRESHOLDS
-    bins = [-np.inf, t["Silver"], t["Gold"], t["Platinum"], np.inf]
-    return pd.cut(index, bins=bins, labels=TIERS, right=False)
+    silver, gold, platinum = np.maximum.accumulate([t["Silver"], t["Gold"], t["Platinum"]])
+    codes = (index >= silver).astype(int) + (index >= gold) + (index >= platinum)
+    return pd.Series(pd.Categorical.from_codes(codes.where(index.notna(), -1), categories=TIERS),
+                     index=index.index)
 
 
 def exclude_proxies(weights: dict) -> dict:

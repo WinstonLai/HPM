@@ -14,6 +14,7 @@ KML-derived GeoJSON where all attributes are packed into a single
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 from pathlib import Path
@@ -79,14 +80,49 @@ def _poll_download_url(dataset_id: str, retries: int = 4) -> str:
     return payload["data"]["url"]
 
 
+def is_valid_download(path: Path) -> bool:
+    """Cheap sanity check that a cached/downloaded file is a complete dataset,
+    not a truncated write or an HTML/JSON error page saved under a data name."""
+    try:
+        raw = path.read_bytes()
+        if path.suffix == ".geojson":
+            return bool(json.loads(raw).get("features"))
+        if path.suffix == ".json":
+            json.loads(raw)
+            return True
+        if path.suffix == ".csv":
+            lines = raw.decode("utf-8-sig").splitlines()
+            return len(lines) >= 2 and "," in lines[0] and not lines[0].lstrip().startswith("<")
+        return bool(raw)
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
+def write_validated(dest: Path, write_tmp) -> None:
+    """Write `dest` atomically: `write_tmp(tmp_path)` fills a sibling file that is
+    validated and then renamed over `dest`, so a crash or a bad response can never
+    leave a partial file that later runs would trust as a cache hit."""
+    tmp = dest.with_name(f"{dest.stem}.part{dest.suffix}")
+    try:
+        write_tmp(tmp)
+        if not is_valid_download(tmp):
+            raise DownloadError(f"{dest.name}: downloaded content is empty or not valid {dest.suffix} data")
+        os.replace(tmp, dest)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
 def fetch_dataset(dataset_id: str, filename: str, force: bool = False) -> Path:
-    """Download (or reuse cached copy of) a data.gov.sg dataset; return local path."""
+    """Download (or reuse cached copy of) a data.gov.sg dataset; return local path.
+    A cached file that fails validation is downloaded again."""
     dest = RAW_DIR / filename
     if dest.exists() and not force:
-        return dest
+        if is_valid_download(dest):
+            return dest
+        print(f"  [warn] cached {filename} is incomplete or invalid; downloading again")
     download_url = _poll_download_url(dataset_id)
     resp = _get_with_retries(download_url, timeout=90, retries=4, throttle=False)
-    dest.write_bytes(resp.content)
+    write_validated(dest, lambda tmp: tmp.write_bytes(resp.content))
     return dest
 
 

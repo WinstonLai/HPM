@@ -15,6 +15,8 @@ from pathlib import Path
 
 import requests
 
+from datagovsg import is_valid_download, write_validated
+
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 HEADERS = {"User-Agent": "HPM-readiness-poc/1.0 (contact: hpb-cip-poc)"}
 RAW_DIR = Path(__file__).resolve().parent.parent / "data" / "raw"
@@ -55,7 +57,9 @@ def fetch_osm(filename: str, force: bool = False, attempts: int = 4) -> Path:
     """Download (or reuse the cached copy of) one OSM extract."""
     dest = RAW_DIR / filename
     if dest.exists() and not force:
-        return dest
+        if is_valid_download(dest):
+            return dest
+        print(f"  [warn] cached {filename} is incomplete or invalid; downloading again")
     query = f"[out:json][timeout:120];{SG_AREA}({QUERIES[filename]});out center tags;"
     last: Exception | None = None
     for attempt in range(attempts):
@@ -65,15 +69,20 @@ def fetch_osm(filename: str, force: bool = False, attempts: int = 4) -> Path:
                 time.sleep(20 * (attempt + 1))
                 continue
             resp.raise_for_status()
-            dest.write_text(json.dumps(_to_geojson(resp.json().get("elements", []))))
+            elements = resp.json().get("elements", [])
+            if not elements:   # Overpass answers 200 with a "remark" and no elements when a query times out
+                raise ValueError("Overpass returned no elements")
+            write_validated(dest, lambda tmp: tmp.write_text(json.dumps(_to_geojson(elements))))
             return dest
-        except (requests.RequestException, ValueError) as exc:
+        except (requests.RequestException, ValueError, RuntimeError) as exc:
             last = exc
             time.sleep(10 * (attempt + 1))
     raise RuntimeError(f"Overpass failed for {filename} after {attempts} attempts: {last}")
 
 
-def download_all(force: bool = False) -> None:
+def download_all(force: bool = False) -> list[str]:
+    """Fetch every extract; returns the filenames that failed."""
+    failed: list[str] = []
     for filename in QUERIES:
         print(f"[osm] fetching {filename} ...")
         try:
@@ -82,3 +91,5 @@ def download_all(force: bool = False) -> None:
             print(f"  -> {path} ({n} points)")
         except Exception as exc:  # noqa: BLE001
             print(f"  [error] {filename}: {exc}")
+            failed.append(filename)
+    return failed
