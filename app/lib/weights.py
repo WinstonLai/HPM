@@ -108,9 +108,13 @@ def load_index() -> tuple[pd.DataFrame, bool]:
 
 
 def show_banner(key: str) -> None:
-    """Tell the user the numbers on this page use their custom weights."""
+    """Tell the user the numbers on this page use their custom weights. The status and the
+    reset button sit at the top of the sidebar, in the same place on every page; the notice
+    in the page body is for narrow screens, where the sidebar is collapsed."""
     if get_settings() is None:
         return
-    col_text, col_btn = st.columns([5, 1])
-    col_text.info("Showing your **custom weights** from the What-If Simulator, not the defaults.", icon="🎚️")
-    col_btn.button("Reset to defaults", key=f"reset_{key}", on_click=reset)
+    st.info("Showing your **custom weights** from the What-If Simulator, not the defaults. "
+            "Reset them from the sidebar.", icon="🎚️")
+    with st.sidebar:
+        st.warning("Custom weights are active", icon="🎚️")
+        st.button("Reset to defaults", key=f"reset_{key}", on_click=reset, width="stretch")

@@ -35,6 +35,12 @@ if not data_loader.data_available():
 df, is_custom = weights.load_index()
 weights.show_banner("home")
 
+STALE_AFTER_DAYS = 180
+age = data_loader.data_age_days()
+if age is not None and age > STALE_AFTER_DAYS:
+    st.warning(f"The underlying datasets were last fetched {age} days ago, so amenity counts may be out of date. "
+               "Re-run `python etl/run_all.py` to refresh them.", icon="⏳")
+
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Total malls assessed", len(df))
 col2.metric("Average HPM Index", f"{df['hpm_index'].mean():.1f} / 100")
@@ -69,8 +75,9 @@ with right:
     st.subheader("Malls by Region")
     region_counts = df["region"].value_counts().reset_index()
     region_counts.columns = ["Region", "Malls"]
-    fig = px.bar(region_counts, x="Region", y="Malls", color="Region")
-    fig.update_layout(showlegend=False, margin=dict(l=0, r=0, t=10, b=0), height=300)
+    fig = px.bar(region_counts, x="Region", y="Malls", text="Malls")
+    fig.update_traces(textposition="outside", cliponaxis=False)
+    fig.update_layout(margin=dict(l=0, r=0, t=10, b=0), height=300)
     st.plotly_chart(fig, width="stretch")
 
 st.divider()
@@ -88,15 +95,17 @@ op_summary["operator"] = op_summary["operator"].map(escape_html)    # Plotly axi
 if op_summary.empty:
     st.info("No operator data could be resolved from Wikipedia infoboxes for this run.")
 else:
+    # Horizontal bars, biggest at the top: landlord names are long and unreadable as x-axis labels.
     fig2 = px.bar(
-        op_summary,
-        x="operator",
-        y="malls",
+        op_summary.iloc[::-1],
+        x="malls",
+        y="operator",
+        orientation="h",
         color="avg_index",
         color_continuous_scale="Tealgrn",
-        labels={"operator": "Operator", "malls": "Number of Malls", "avg_index": "Avg HPM Index"},
+        labels={"operator": "", "malls": "Number of Malls", "avg_index": "Avg HPM Index"},
     )
-    fig2.update_layout(margin=dict(l=0, r=0, t=10, b=0), height=350)
+    fig2.update_layout(margin=dict(l=0, r=0, t=10, b=0), height=max(300, 34 * len(op_summary) + 80))
     st.plotly_chart(fig2, width="stretch")
     st.caption(
         "Operator identified via each mall's Wikipedia infobox (owner/developer/management field); "

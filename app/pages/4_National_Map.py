@@ -23,10 +23,10 @@ df, is_custom = weights.load_index()
 weights.show_banner("map")
 has_hpm_list = "is_existing_hpm" in df.columns and int(df["is_existing_hpm"].sum()) > 0
 
-# Sequential, colour-blind-safe scale (light yellow -> dark blue), stretched over
-# ALL assessed malls so the shortlist toggle only changes which points are shown,
-# not how their colours are stretched.
-STOPS = [(255, 255, 204), (161, 218, 180), (65, 182, 196), (44, 127, 184), (37, 52, 148)]
+# Sequential, colour-blind-safe scale (ColorBrewer YlGnBu without its near-white first
+# class, which vanishes on the light basemap), stretched over ALL assessed malls so the
+# shortlist toggle only changes which points are shown, not how their colours are stretched.
+STOPS = [(199, 233, 180), (127, 205, 187), (65, 182, 196), (44, 127, 184), (37, 52, 148)]
 lo, hi = df["hpm_index"].min(), df["hpm_index"].max()
 span = max(hi - lo, 1e-9)
 
@@ -99,11 +99,16 @@ st.markdown(
     f"<span>{lo:.0f}</span>"
     f"<div style='height:12px;width:240px;border:1px solid #888;background:linear-gradient(90deg,{gradient})'></div>"
     f"<span>{hi:.0f}</span><span style='margin-left:8px'>HPM Index (low → high)</span>"
+    "<span style='margin-left:16px;display:inline-flex;align-items:center;gap:4px'>"
+    "<span style='width:8px;height:8px;border-radius:50%;border:1px solid #888;display:inline-block'></span>→"
+    "<span style='width:16px;height:16px;border-radius:50%;border:1px solid #888;display:inline-block'></span>"
+    " marker size = score</span>"
     + ("<span style='margin-left:16px;color:#e67800'>◯ existing HPM</span>" if highlight_hpm else "")
     + "</div>",
     unsafe_allow_html=True,
 )
-st.caption(f"Showing {len(shown)} malls. Marker size grows with score. Hover for details.")
+st.caption(f"Showing {len(shown)} malls. Hover over a marker for details; pick a mall in \"Zoom to a mall\" "
+           "to focus on it, or go back to \"(whole of Singapore)\" to reset the view.")
 
 if focus != "(whole of Singapore)":
     sel = shown[shown["name"] == focus].iloc[0]

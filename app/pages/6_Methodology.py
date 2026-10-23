@@ -30,13 +30,30 @@ if not data_loader.data_available():
 category_scores = data_loader.load_category_scores()
 index_df = data_loader.load_default_index()
 
+
+@st.cache_data
+def _scenario_table(scores: pd.DataFrame) -> pd.DataFrame:
+    return scoring.scenario_comparison(scores)
+
+
+@st.cache_data
+def _stability_table(scores: pd.DataFrame) -> pd.DataFrame:
+    return scoring.rank_stability(scores)
+
+
 supply_pct = round(scoring.SUPPLY_BLOCK_WEIGHT)
 demand_pct = round(scoring.DEMAND_BLOCK_WEIGHT)
 n_malls = len(index_df)
 n_known_operator = int((index_df["operator"] != "Unknown").sum())
 
+st.markdown(
+    "**Contents:** [1. The big picture](#big-picture) · [2. What each category measures](#categories) · "
+    "[3. Raw counts vs. normalised scores](#normalisation) · [4. Worked example](#worked-example) · "
+    "[5. Tiers and limitations](#limitations) · [6. How robust is the ranking?](#robustness)"
+)
+
 # --------------------------------------------------------------------------------
-st.header("1. The big picture")
+st.header("1. The big picture", anchor="big-picture")
 st.markdown(
     f"""
 Every mall gets **one score on a 0–100 scale** — the **HPM Index** — built from two halves:
@@ -80,7 +97,7 @@ with col3:
 st.divider()
 
 # --------------------------------------------------------------------------------
-st.header("2. What each category actually measures")
+st.header("2. What each category actually measures", anchor="categories")
 
 CATEGORY_INFO = [
     ("A_dining_score", "Supply", "🍽️", "Healthy Dining",
@@ -180,7 +197,7 @@ st.caption(
 st.divider()
 
 # --------------------------------------------------------------------------------
-st.header("3. Raw counts vs. normalised scores")
+st.header("3. Raw counts vs. normalised scores", anchor="normalisation")
 st.markdown(
     """
 A bigger mall will almost always have more of everything — more dining options, more
@@ -259,7 +276,7 @@ with st.expander("See this scaling on real data — Healthy Dining"):
 st.divider()
 
 # --------------------------------------------------------------------------------
-st.header("4. Try it yourself: how one mall's score is built")
+st.header("4. Try it yourself: how one mall's score is built", anchor="worked-example")
 st.markdown("Pick any mall below to see its actual numbers plugged into the formula.")
 
 mall_options = sorted(index_df["name"])
@@ -332,7 +349,7 @@ st.caption(
 st.divider()
 
 # --------------------------------------------------------------------------------
-st.header("5. Tiers, quadrants and what this score doesn't capture")
+st.header("5. Tiers, quadrants and what this score doesn't capture", anchor="limitations")
 
 st.subheader("How tiers and quadrants are assigned")
 t = scoring.TIER_THRESHOLDS
@@ -468,7 +485,7 @@ Full source citations and dataset IDs are in the project's `README.md`.
 st.divider()
 
 # --------------------------------------------------------------------------------
-st.header("6. How robust is the ranking?")
+st.header("6. How robust is the ranking?", anchor="robustness")
 st.markdown(
     """
 Every ranking here rests on weights that are judgement calls, so it is worth knowing how much they
@@ -478,7 +495,7 @@ other reasonable choices.
 )
 
 st.subheader("Other readings of the charter's weights")
-st.dataframe(scoring.scenario_comparison(category_scores), hide_index=True, width="stretch")
+st.dataframe(_scenario_table(category_scores), hide_index=True, width="stretch")
 st.caption(
     "The charter is ambiguous: its category weights (25/20/15/10/10/10 plus Demand Potential 10) sum to "
     "100 with Supply at 90%, yet its composite formula says Supply 70% / Demand 30%. The default follows "
@@ -487,7 +504,7 @@ st.caption(
 )
 
 st.subheader("Rank stability under random re-weighting")
-stability = scoring.rank_stability(category_scores)
+stability = _stability_table(category_scores)
 top = stability.head(20)
 st.caption(
     "500 random weightings: Supply and Demand sub-weights are drawn around the defaults, and Supply's share "
