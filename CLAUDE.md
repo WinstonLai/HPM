@@ -52,7 +52,10 @@ python etl/build_mall_registry.py --refresh-types       # after editing data/man
 python etl/build_mall_registry.py --dedupe              # merge duplicate malls in the current malls.csv
 ```
 
-There is a pytest suite for the ETL logic (`tests/`) but no linter config or CI.
+There is a pytest suite (`tests/`: ETL logic, plus AppTest smoke tests that render every
+Streamlit page) and a GitHub Actions workflow (`.github/workflows/ci.yml`) that compiles,
+tests (Python 3.11 and 3.12, from `requirements.lock`) and `pip-audit`s on every push/PR and
+weekly; there is no linter config.
 Each stage validates its output (`etl/validate.py`) and records provenance in
 `data/processed/_meta.json` (`etl/provenance.py`). `data/processed/*.csv`
 is committed (so the dashboard runs without an ETL pass); `data/raw/` is
