@@ -26,6 +26,8 @@ pip install -r requirements.txt        # bounded ranges; use requirements.lock f
 # throttled data.gov.sg downloads). Re-run any time to refresh the data.
 python etl/run_all.py
 python etl/run_all.py --force          # re-download/re-scrape even if cached
+HPM_CONTACT=you@example.org python etl/run_all.py   # optional: added to the User-Agent sent to
+                                       # Wikipedia/Overpass (default: just the repo URL)
 python etl/run_all.py --limit 10       # cap mall count, for a fast debug run; writes to
                                        # data/processed_limited/ (gitignored), never data/processed/
 python etl/run_all.py --allow-missing  # carry on past a failed download (default: stop, since a

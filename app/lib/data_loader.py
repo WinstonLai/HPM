@@ -12,26 +12,46 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 PROCESSED_DIR = REPO_ROOT / "data" / "processed"
 
 
+def _mtime_ns(path: Path) -> int:
+    """Modification time of `path` (0 if it does not exist); part of every cache key below, so a
+    re-run ETL shows up in a running dashboard instead of waiting for a restart."""
+    try:
+        return path.stat().st_mtime_ns
+    except OSError:
+        return 0
+
+
 @st.cache_data
+def _read_csv(path: str, mtime_ns: int, usecols: tuple | None = None) -> pd.DataFrame:
+    # postal_code is a zero-padded string; read as a number it would lose its leading zeros.
+    return pd.read_csv(path, usecols=list(usecols) if usecols else None, dtype={"postal_code": str})
+
+
+@st.cache_data
+def _read_json(path: str, mtime_ns: int) -> dict:
+    try:
+        return json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def _csv(name: str, usecols: tuple | None = None) -> pd.DataFrame:
+    path = PROCESSED_DIR / name
+    return _read_csv(str(path), _mtime_ns(path), usecols)
+
+
 def load_category_scores() -> pd.DataFrame:
-    return pd.read_csv(PROCESSED_DIR / "category_scores.csv")
+    return _csv("category_scores.csv")
 
 
-@st.cache_data
 def load_default_index() -> pd.DataFrame:
-    return pd.read_csv(PROCESSED_DIR / "hpm_index.csv")
+    return _csv("hpm_index.csv")
 
 
-@st.cache_data
 def load_meta() -> dict:
     """Provenance written by the ETL (data/processed/_meta.json); {} if absent."""
     path = PROCESSED_DIR / "_meta.json"
-    if not path.exists():
-        return {}
-    try:
-        return json.loads(path.read_text())
-    except (OSError, ValueError):
-        return {}
+    return _read_json(str(path), _mtime_ns(path))
 
 
 def data_available() -> bool:
@@ -51,11 +71,9 @@ def data_age_days() -> int | None:
     return max((datetime.now(timezone.utc) - when).days, 0)
 
 
-@st.cache_data
 def load_aliases() -> pd.Series:
     """Other names each mall is known by (mall_id -> "A; B"), from the registry; empty if unavailable."""
-    path = PROCESSED_DIR / "malls.csv"
     try:
-        return pd.read_csv(path, usecols=["mall_id", "aliases"]).set_index("mall_id")["aliases"].fillna("")
+        return _csv("malls.csv", ("mall_id", "aliases")).set_index("mall_id")["aliases"].fillna("")
     except (OSError, ValueError):
         return pd.Series(dtype=str)
