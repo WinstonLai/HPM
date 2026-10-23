@@ -33,6 +33,17 @@ def test_index_is_70_30_blend_of_blocks():
     assert np.allclose(r["hpm_index"], expected)
 
 
+def test_tied_or_inverted_tier_cutoffs_do_not_raise():
+    idx = pd.Series([60.0, 45.0, 30.0, 10.0, np.nan])
+    tied = sf.assign_tiers(idx, {"Platinum": 40, "Gold": 40, "Silver": 20})
+    assert tied.astype(str).tolist()[:4] == ["Platinum", "Platinum", "Silver", "Bronze"]
+    assert tied.isna().tolist() == [False, False, False, False, True]      # no index -> no tier
+    inverted = sf.assign_tiers(idx, {"Platinum": 40, "Gold": 60, "Silver": 20})
+    assert inverted.astype(str).tolist()[:4] == ["Platinum", "Silver", "Silver", "Bronze"]
+    flat = sf.assign_tiers(idx, {"Platinum": 20, "Gold": 20, "Silver": 20})
+    assert flat.astype(str).tolist()[:4] == ["Platinum", "Platinum", "Platinum", "Bronze"]
+
+
 def test_tiers_use_absolute_cutoffs_and_move_with_the_scores():
     idx = pd.Series([60.0, 50.0, 49.9, 35.0, 34.9, 20.0, 19.9, 0.0])
     assert sf.assign_tiers(idx).astype(str).tolist() == [
