@@ -117,8 +117,9 @@ Two independent halves connected only through `data/processed/*.csv`:
    min-max normalization — deliberately no geopandas/shapely dependency).
 
 2. **`app/`** — the Streamlit dashboard, reads only `data/processed/*.csv`,
-   never calls external APIs live. `Home.py` is the entrypoint (Page 1 —
-   Executive Summary); `app/pages/` holds Pages 2–8 (National Ranking,
+   never calls external APIs live. `Home.py` is the entrypoint (Executive
+   Summary); `app/pages/` holds the other seven pages, ordered by their `1_`…`7_`
+   filename prefix (National Ranking,
    What-If Simulator, Mall Comparison, National Map, Strategic Matrix — a
    2×2 Readiness×Demand quadrant enhancement — Methodology, an
    interactive walkthrough of the scoring math, data-source limitations and

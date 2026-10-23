@@ -1,4 +1,4 @@
-"""Page 5 - National Map: mall locations coloured by score, candidate shortlist toggle."""
+"""National Map: mall locations coloured by score, candidate shortlist toggle."""
 from __future__ import annotations
 
 import sys

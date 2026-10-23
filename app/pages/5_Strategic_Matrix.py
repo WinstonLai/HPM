@@ -1,4 +1,4 @@
-"""Page 6 - Strategic Matrix (enhancement): 2x2 Readiness x Demand quadrant view."""
+"""Strategic Matrix (enhancement): 2x2 Readiness x Demand quadrant view."""
 from __future__ import annotations
 
 import sys

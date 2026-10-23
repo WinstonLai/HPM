@@ -1,4 +1,4 @@
-"""Page 1 - Executive Summary.
+"""Home - Executive Summary.
 
 Streamlit entrypoint: `streamlit run app/Home.py`
 """

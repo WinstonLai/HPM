@@ -1,4 +1,4 @@
-"""Page 2 - National Ranking: dynamic ranking table with region/operator/tier filters."""
+"""National Ranking: dynamic ranking table with region/operator/tier filters."""
 from __future__ import annotations
 
 import sys

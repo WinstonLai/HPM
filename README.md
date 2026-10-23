@@ -279,9 +279,9 @@ etl/                ETL pipeline (run_all.py orchestrates everything)
   provenance.py      writes data/processed/_meta.json (build time, parameters, raw-file hashes)
 tests/               pytest suite for the ETL logic (pip install -r requirements-dev.txt; pytest)
 app/                 Streamlit dashboard
-  Home.py            Page 1 - Executive Summary
+  Home.py            entrypoint - Executive Summary
   lib/                data loading, scoring wrapper, and weights.py (custom weights shared across pages)
-  pages/              Pages 2-8
+  pages/              the other seven pages; the filename prefix (1_ … 7_) sets the sidebar order
 data/
   raw/               cached raw downloads (gitignored)
   manual/            hand-maintained inputs: geocode_overrides.csv, operator_aliases.csv, operators.csv,

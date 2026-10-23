@@ -1,4 +1,4 @@
-"""Page 3 - What-If Simulator: reweight categories live, ranking updates instantly.
+"""What-If Simulator: reweight categories live, ranking updates instantly.
 The weights chosen here apply to every other page too (see app/lib/weights.py)."""
 from __future__ import annotations
 

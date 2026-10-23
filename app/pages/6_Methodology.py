@@ -1,4 +1,4 @@
-"""Page 7 - Methodology: plain-language explanation of the data, scoring
+"""Methodology: plain-language explanation of the data, scoring
 formula, and normalization approach, with a live worked example built from
 real numbers so business users can see exactly how any mall's score is
 calculated (not just read the formula)."""
