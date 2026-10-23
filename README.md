@@ -15,7 +15,7 @@ Demand Opportunity = Reach & Population + Accessibility + Engagement Gap
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt   # or: pip install -r requirements.lock for the exact tested versions
 
 # 1. Build the data (one-off, ~10-15 min: Wikipedia scrape + OneMap geocoding
 #    + throttled data.gov.sg downloads). Re-run any time to refresh.
