@@ -108,13 +108,13 @@ CATEGORY_INFO = [
      "(matched on postal code + brand) and repeated rows; (3) NEA-licensed supermarkets whose "
      "listed address contains the mall's name. Any licensed supermarket counts — the data can't "
      "tell us which ones stock healthier-choice ranges.",
-     "data.gov.sg: Healthier Eateries, Healthier Dining Partners · NEA: Supermarket Licences"),
+     "HPB: Healthier Eateries, Healthier Dining Partners · NEA: Supermarket Licences"),
     ("B_fitness_score", "Supply", "🏋️", "Physical Activity",
      "Gyms@SG gyms, SportSG sport centres/stadiums/swimming complexes, and commercial gyms and "
      "fitness studios from OpenStreetMap (OSM venues that duplicate a listed one are dropped), "
      "within ~200m of the mall. OSM coverage of small studios is patchy, and sports retailers "
      "and other activity-oriented tenants are not counted.",
-     "data.gov.sg: Gyms@SG · SportSG: Sport Facilities · OpenStreetMap contributors"),
+     "HPB: Gyms@SG · SportSG: Sport Facilities · OpenStreetMap contributors"),
     ("C_engagement_score", "Supply", "🤝", "Community Engagement",
      "A proxy: the number of People's Association Community Clubs / PAssion WaVe outlets "
      "within ~500m. No public dataset of actual community health-event locations exists (see Section 5).",
@@ -129,7 +129,7 @@ CATEGORY_INFO = [
      "locations within ~200m. (NParks' file also lists carparks, noticeboards, toilets, etc.; "
      "those are excluded.) These are park facilities near the mall, not facilities inside it. "
      "Quiet corners and walkability have no usable data and aren't counted.",
-     "data.gov.sg: Parks@SG · NParks: Park Facilities · LTA: Bicycle Rack"),
+     "HPB: Parks@SG · NParks: Park Facilities · LTA: Bicycle Rack"),
     ("F_partnership_score", "Supply", "🏢", "Partnership Readiness",
      "A proxy, not a record of partnerships: the number of malls in this list that share the "
      "mall's landlord group (scaled 0–100, then × 0.8), plus a flat +20 for any mall flagged as a "
@@ -162,7 +162,7 @@ CATEGORY_INFO = [
      "mall with no residents in its catchment has no meaningful gap: it shows as n/a and its "
      "Demand score is worked out from its other factors. Community Clubs are deliberately not "
      "part of it, so it doesn't mirror the Community Engagement score.",
-     "data.gov.sg: Healthier Eateries, Gyms@SG · SportSG · MOH: CHAS Clinics · SingStat: Census 2020"),
+     "HPB: Healthier Eateries, Gyms@SG · SportSG · MOH: CHAS Clinics · SingStat: Census 2020"),
 ]
 
 supply_tab, demand_tab = st.tabs(["Supply Readiness categories", "Demand Opportunity factors"])

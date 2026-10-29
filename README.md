@@ -54,11 +54,11 @@ fabricated. All data.gov.sg datasets are pulled live via the current
 | Category | Datasets | Publisher |
 |---|---|---|
 | Mall registry | Three Wikipedia sources unioned + de-duplicated: "List of shopping malls in Singapore", `Category:Shopping malls in Singapore`, and the "Housing estate commercial areas" section of "List of commercial sites in Singapore" (184 malls after de-duplication and geocode validation) — geocoded via OneMap Search API | Wikipedia / OneMap (SLA) |
-| A – Healthy Dining | Healthier Eateries, Healthier Dining Partners – F&B Partners, List of Supermarket Licences | data.gov.sg / NEA |
-| B – Physical Activity | Gyms@SG, SportSG Sport Facilities, commercial gyms and studios from OpenStreetMap (Overpass API) | data.gov.sg / SportSG / OpenStreetMap contributors |
+| A – Healthy Dining | Healthier Eateries, Healthier Dining Partners – F&B Partners, List of Supermarket Licences | HPB / NEA |
+| B – Physical Activity | Gyms@SG, SportSG Sport Facilities, commercial gyms and studios from OpenStreetMap (Overpass API) | HPB / SportSG / OpenStreetMap contributors |
 | C – Community Engagement | Community Club / PAssion WaVe Outlet (proxy — see Limitations) | People's Association |
 | D – Healthcare | CHAS Clinics, Listing of Licensed Pharmacies | MOH / HSA |
-| E – Healthy Infrastructure | Parks@SG, Park Facilities (playgrounds, fitness areas, drinking fountains, foot-relax), LTA Bicycle Rack | data.gov.sg / NParks / LTA |
+| E – Healthy Infrastructure | Parks@SG, Park Facilities (playgrounds, fitness areas, drinking fountains, foot-relax), LTA Bicycle Rack | HPB / NParks / LTA |
 | F – Landlord & Partnership Readiness | Operator scraped from Wikipedia infobox (proxy — see Limitations) | Wikipedia |
 | G – Demand (Reach/Population/Accessibility) | Resident Population by Planning Area/Subzone (Census 2020), Master Plan 2019 Subzone Boundary, LTA MRT Station Exits, LTA Bus Stops | SingStat / URA / LTA |
 
