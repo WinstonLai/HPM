@@ -1,8 +1,8 @@
 {
   "category_scores": {
-    "built_at": "2026-10-29T10:10:05+00:00",
-    "git_commit": "cec1afa",
-    "n_malls": 187,
+    "built_at": "2026-10-29T10:21:47+00:00",
+    "git_commit": "a3e8414",
+    "n_malls": 184,
     "parameters": {
       "bus_radius_m": 400,
       "catchment_radius_m": 1200,
@@ -21,15 +21,15 @@
     }
   },
   "index": {
-    "built_at": "2026-10-29T10:10:06+00:00",
+    "built_at": "2026-10-29T10:21:48+00:00",
     "demand_block_weight": 30,
     "demand_weights": {
       "accessibility_score": 33.33,
       "engagement_gap_score": 33.33,
       "reach_population_score": 33.33
     },
-    "git_commit": "cec1afa",
-    "n_malls": 187,
+    "git_commit": "a3e8414",
+    "n_malls": 184,
     "supply_block_weight": 70,
     "supply_weights": {
       "A_dining_score": 31.25,
@@ -58,7 +58,7 @@
     ]
   },
   "raw_data": {
-    "built_at": "2026-10-29T10:10:05+00:00",
+    "built_at": "2026-10-29T10:21:48+00:00",
     "files": {
       "bicycle_racks.geojson": {
         "bytes": 240638,
@@ -169,21 +169,22 @@
         "sha256": "d5053b464e12f62e"
       }
     },
-    "git_commit": "cec1afa",
+    "git_commit": "a3e8414",
     "latest_fetch": "2026-10-23T04:43:14+00:00"
   },
   "registry": {
-    "built_at": "2026-10-29T10:10:05+00:00",
-    "git_commit": "cec1afa",
-    "n_malls": 187,
+    "built_at": "2026-10-29T10:21:47+00:00",
+    "git_commit": "a3e8414",
+    "n_malls": 184,
     "qa_events": {
+      "excluded": 3,
       "existing_hpm_added": 15,
       "geocode_override": 7,
       "geocode_rejected": 37,
       "merged": 6
     },
     "types": {
-      "Area / precinct": 7,
+      "Area / precinct": 4,
       "Market / hawker centre": 4,
       "Neighbourhood centre": 39,
       "Shopping mall": 137

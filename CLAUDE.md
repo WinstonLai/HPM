@@ -79,7 +79,7 @@ Two independent halves connected only through `data/processed/*.csv`:
      subcategory since it only returns direct members) and the "Housing
      estate commercial areas" section of "List of commercial sites in
      Singapore" (neighbourhood centres, some plain-text with no Wikipedia
-     article). Combined this yields ~215 candidates → ~187 after duplicates and the HPB-listed additions
+     article). Combined this yields ~215 candidates → ~184 after duplicates, `data/manual/excluded_malls.csv` and the HPB-listed additions
      are merged and unverifiable geocodes are dropped (see `registry_qa.csv`). Uses wikitext parsing, not HTML — the live page's
      rendered HTML wraps mall lists in Parsoid `data-mw` transclusion JSON
      with no `<a>` tags, so `action=parse&prop=wikitext` is used instead.

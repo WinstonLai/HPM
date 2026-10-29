@@ -53,7 +53,7 @@ fabricated. All data.gov.sg datasets are pulled live via the current
 
 | Category | Datasets | Publisher |
 |---|---|---|
-| Mall registry | Three Wikipedia sources unioned + de-duplicated: "List of shopping malls in Singapore", `Category:Shopping malls in Singapore`, and the "Housing estate commercial areas" section of "List of commercial sites in Singapore" (187 malls after de-duplication and geocode validation) — geocoded via OneMap Search API | Wikipedia / OneMap (SLA) |
+| Mall registry | Three Wikipedia sources unioned + de-duplicated: "List of shopping malls in Singapore", `Category:Shopping malls in Singapore`, and the "Housing estate commercial areas" section of "List of commercial sites in Singapore" (184 malls after de-duplication and geocode validation) — geocoded via OneMap Search API | Wikipedia / OneMap (SLA) |
 | A – Healthy Dining | Healthier Eateries, Healthier Dining Partners – F&B Partners, List of Supermarket Licences | HPB / NEA |
 | B – Physical Activity | Gyms@SG, SportSG Sport Facilities, commercial gyms and studios from OpenStreetMap (Overpass API) | HPB / SportSG / OpenStreetMap contributors |
 | C – H365 & HPB Engagement | Community Club / PAssion WaVe Outlet (proxy — see Limitations) | People's Association |
@@ -219,7 +219,7 @@ Exact dataset IDs are in `etl/build_amenities.py`.
   verbatim-repeated partner rows are collapsed. Outlets with no parseable
   postal code or a differently spelled brand can still be double-counted.
 - **Category F coverage**: a landlord was found for about half the malls
-  (88 of 187 at the time of writing); the rest are "Unknown" and count as a
+  (88 of 184 at the time of writing); the rest are "Unknown" and count as a
   portfolio of one, so Category F is still non-zero for only 30 malls. (An
   earlier build found just 24: Wikipedia fetches that failed under load were
   silently treated as "no infobox". They now retry, and a persistent failure

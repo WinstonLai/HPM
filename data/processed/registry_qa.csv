@@ -64,3 +64,6 @@ existing_hpm_added,Zhongshan Mall,missing from the Wikipedia registry; added fro
 existing_hpm_added,Kampung Admiralty,missing from the Wikipedia registry; added from existing_hpm.csv (KAMPUNG ADMIRALTY)
 existing_hpm_added,Paya Lebar Quarter,missing from the Wikipedia registry; added from existing_hpm.csv (PAYA LEBAR QUARTER)
 merged,The Star,"merged into 'The Star Vista' (12m apart, one name contains the other)"
+excluded,Ang Mo Kio Town Centre,Precinct name; its malls (AMK Hub etc.) are already listed separately
+excluded,Potong Pasir,Neighbourhood name from the Wikipedia commercial-sites list; no single mall to geocode (OneMap only offers a hospital)
+excluded,Upper Aljunied,Road/precinct name; no single mall to geocode (OneMap only offers a petrol station)
