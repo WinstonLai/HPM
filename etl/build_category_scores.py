@@ -96,6 +96,18 @@ def normalize_name_strict(name: str) -> str:
     return NON_ALNUM_RE.sub(" ", name).strip()
 
 
+_NUMBER_WORDS = {"one": "1", "two": "2", "three": "3", "four": "4", "five": "5",
+                 "six": "6", "seven": "7", "eight": "8", "nine": "9", "ten": "10"}
+
+
+def _number_spellings(key: str) -> set[str]:
+    """`key` plus the same name with its digits spelled out and vice versa, so "lot 1" also finds "LOT ONE"."""
+    to_words = {v: k for k, v in _NUMBER_WORDS.items()}
+    as_digits = " ".join(_NUMBER_WORDS.get(t, t) for t in key.split())
+    as_words = " ".join(to_words.get(t, t) for t in key.split())
+    return {key, as_digits, as_words}
+
+
 def count_by_address_text(malls: pd.DataFrame, addresses: pd.Series) -> np.ndarray:
     """Count matches for datasets published as a plain CSV with a free-text
     address column and no coordinates (e.g. HPB's Healthier Dining Partners,
@@ -105,13 +117,13 @@ def count_by_address_text(malls: pd.DataFrame, addresses: pd.Series) -> np.ndarr
     against spurious matches, so short names like "IMM" or "Duo" are matched
     the same as any other -- see normalize_name_strict's docstring."""
     norm_addresses = addresses.fillna("").map(lambda a: f" {normalize_name_strict(a)} ").to_numpy()
+    aliases = malls["aliases"].fillna("") if "aliases" in malls.columns else pd.Series("", index=malls.index)
     counts = np.zeros(len(malls), dtype=int)
-    for i, mall_name in enumerate(malls["name"]):
-        key = normalize_name_strict(mall_name)
-        if not key:
-            continue
-        padded_key = f" {key} "
-        counts[i] = sum(1 for addr in norm_addresses if padded_key in addr)
+    for i, (mall_name, alias_text) in enumerate(zip(malls["name"], aliases)):
+        keys = {normalize_name_strict(n) for n in [mall_name, *str(alias_text).split("; ")]} - {""}
+        padded_keys = [f" {k} " for key in keys for k in _number_spellings(key)]
+        # any(): an outlet that matches both the name and an alias is still one outlet
+        counts[i] = sum(1 for addr in norm_addresses if any(k in addr for k in padded_keys))
     return counts
 
 
@@ -203,6 +215,9 @@ def ambiguous_name_keys(malls: pd.DataFrame) -> set[str]:
 # to one word, and a geocode error can put a mall kilometres from its own
 # building; without a bound either case silently pulls in far-away amenities.
 NAME_MATCH_MAX_M = 500
+# Below this many residents in the 1.2km catchment a mall is a commercial core (Marina Bay Sands,
+# Terminal 3, ...) and a per-resident amenity gap says nothing about it.
+MIN_GAP_POPULATION = 1000
 
 # Name matches rejected for being too far away. A mall that shows up here
 # usually has a bad geocode, so this doubles as a registry QA signal.
@@ -443,6 +458,9 @@ def station_access(malls: pd.DataFrame, exits: pd.DataFrame,
     if exits.empty or "STATION_NA" not in exits.columns:
         return pd.DataFrame(0.0, index=malls.index, columns=cols)
     station = exits["STATION_NA"].fillna("").astype(str).str.strip().str.upper()
+    exits, station = exits[station != ""], station[station != ""]   # an unnamed exit is not a phantom station
+    if exits.empty:
+        return pd.DataFrame(0.0, index=malls.index, columns=cols)
     lat, lon = exits["lat"].to_numpy(dtype=float), exits["lon"].to_numpy(dtype=float)
     rows = []
     for mall in malls.itertuples():
@@ -546,16 +564,16 @@ def compute_untapped_demand(malls: pd.DataFrame, pop_catchment: np.ndarray,
     this factor adds new information rather than repeating Reach.
 
     The residual is rank-scaled (the heavy tails would crush a min-max scale):
-    the biggest shortfall scores 100, the biggest surplus 0. A mall with no
-    resident population in its catchment has no meaningful gap, so its score
-    is NaN ("n/a") and the index re-weights over that mall's remaining
-    Demand factors instead of treating it as a hard zero. Community clubs
+    the biggest shortfall scores 100, the biggest surplus 0. A mall with (almost)
+    no resident population in its catchment (under MIN_GAP_POPULATION) has no
+    meaningful gap, so its score is NaN ("n/a") and the index re-weights over
+    that mall's remaining Demand factors instead of treating it as a hard zero. Community clubs
     (Category C) are intentionally excluded -- see the call site."""
     frames = [p[["lat", "lon"]] for p in point_sets if not p.empty]
     pts = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["lat", "lon"])
     amenities = count_nearby(malls, pts, CATCHMENT_RADIUS_M)
     pop = np.asarray(pop_catchment, dtype=float)
-    has_pop = pop > 0
+    has_pop = pop >= MIN_GAP_POPULATION
     per_10k = np.where(has_pop, amenities / np.where(has_pop, pop, 1) * 10_000, np.nan)
 
     gap = pd.Series(np.nan, index=range(len(malls)))
@@ -563,6 +581,10 @@ def compute_untapped_demand(malls: pd.DataFrame, pop_catchment: np.ndarray,
     if fit.sum() >= 3:
         x, y = np.log(pop[fit]), np.log(amenities[fit].astype(float))
         slope, intercept = np.polyfit(x, y, 1)
+        if slope < 0:
+            # Amenities cluster in low-resident commercial cores, so the raw fit can slope the wrong way, which
+            # would "expect" more amenities where fewer people live. Fall back to a flat expectation instead.
+            slope, intercept = 0.0, float(y.mean())
         residual = pd.Series(y - (intercept + slope * x))
         ranks = residual.rank(method="average", ascending=True)  # biggest shortfall = rank 1
         gap.loc[np.flatnonzero(fit)] = ((len(residual) - ranks) / max(len(residual) - 1, 1) * 100).to_numpy()

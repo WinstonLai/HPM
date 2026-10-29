@@ -130,3 +130,20 @@ def test_existing_hpm_flag_matches_aliases_and_match_as(tmp_path, monkeypatch):
 def test_existing_hpm_flag_is_zero_without_a_list(tmp_path, monkeypatch):
     monkeypatch.setattr(bcs, "MANUAL_DIR", tmp_path)
     assert bcs.flag_existing_hpm(pd.DataFrame({"name": ["A"], "aliases": [""]})).tolist() == [0]
+
+
+def test_untapped_demand_never_expects_more_amenities_from_fewer_residents(monkeypatch):
+    malls = malls_df([A] * 6)
+    # A commercial core (50 residents, 90 amenities) alongside residential malls: the raw fit slopes downwards.
+    amenities = np.array([90, 60, 50, 30, 20, 10])
+    pop = np.array([50.0, 5000.0, 20000.0, 60000.0, 120000.0, 200000.0])
+    monkeypatch.setattr(bcs, "count_nearby", lambda *a, **k: amenities)
+    _, _, gap = bcs.compute_untapped_demand(malls, pop, [points([(1.3, 103.8)])])
+    assert np.isnan(gap[0])                       # <1,000 residents: n/a, not a "severe shortfall"
+    assert gap[5] == gap.max()                    # fewest amenities for the most people: biggest shortfall
+
+
+def test_address_text_matching_uses_aliases_without_double_counting():
+    malls = pd.DataFrame({"name": ["SingPost", "Lot 1"], "aliases": ["SingPost Centre", ""]})
+    addrs = pd.Series(["10 EUNOS ROAD 8 SINGPOST CENTRE", "SINGPOST AND SINGPOST CENTRE", "LOT 1 CHOA CHU KANG", "LOT ONE SHOPPERS MALL", "ELSEWHERE"])
+    assert bcs.count_by_address_text(malls, addrs).tolist() == [2, 2]

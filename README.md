@@ -53,7 +53,7 @@ fabricated. All data.gov.sg datasets are pulled live via the current
 
 | Category | Datasets | Publisher |
 |---|---|---|
-| Mall registry | Three Wikipedia sources unioned + de-duplicated: "List of shopping malls in Singapore", `Category:Shopping malls in Singapore`, and the "Housing estate commercial areas" section of "List of commercial sites in Singapore" (173 malls after de-duplication and geocode validation) — geocoded via OneMap Search API | Wikipedia / OneMap (SLA) |
+| Mall registry | Three Wikipedia sources unioned + de-duplicated: "List of shopping malls in Singapore", `Category:Shopping malls in Singapore`, and the "Housing estate commercial areas" section of "List of commercial sites in Singapore" (184 malls after de-duplication and geocode validation) — geocoded via OneMap Search API | Wikipedia / OneMap (SLA) |
 | A – Healthy Dining | Healthier Eateries, Healthier Dining Partners – F&B Partners, List of Supermarket Licences | HPB / NEA |
 | B – Physical Activity | Gyms@SG, SportSG Sport Facilities, commercial gyms and studios from OpenStreetMap (Overpass API) | HPB / SportSG / OpenStreetMap contributors |
 | C – H365 & HPB Engagement | Community Club / PAssion WaVe Outlet (proxy — see Limitations) | People's Association |
@@ -219,7 +219,7 @@ Exact dataset IDs are in `etl/build_amenities.py`.
   verbatim-repeated partner rows are collapsed. Outlets with no parseable
   postal code or a differently spelled brand can still be double-counted.
 - **Category F coverage**: a landlord was found for about half the malls
-  (89 of 173 at the time of writing); the rest are "Unknown" and count as a
+  (88 of 184 at the time of writing); the rest are "Unknown" and count as a
   portfolio of one, so Category F is still non-zero for only 30 malls. (An
   earlier build found just 24: Wikipedia fetches that failed under load were
   silently treated as "no infobox". They now retry, and a persistent failure
@@ -246,7 +246,12 @@ Exact dataset IDs are in `etl/build_amenities.py`.
   because the residuals are heavy-tailed. A plain amenities-per-resident
   ratio was tried first, but it correlated ~0.8 with Reach & Population, so
   population counted twice in the Demand block; the residual is uncorrelated
-  with population by construction. A mall with no residents in its catchment
+  with population by construction. Because amenities cluster in low-resident
+  commercial cores the fitted trend actually slopes *downwards* (b ≈ −0.17),
+  which would expect more amenities where fewer people live; the build
+  therefore falls back to a flat expectation (b = 0) when the fit is negative,
+  at the cost of some overlap with Reach (Spearman ≈ 0.2). A mall with fewer
+  than 1,000 residents in its catchment (Marina Bay Sands, Terminal 3, ...)
   has no meaningful gap: the score is NaN ("n/a") and `scoring_formula`
   re-weights that mall's Demand score over its other factors rather than
   scoring it 0. Community Clubs are deliberately excluded so the factor

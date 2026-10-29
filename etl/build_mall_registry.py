@@ -520,6 +520,29 @@ def apply_manual_operators(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def drop_excluded(df: pd.DataFrame, qa: list[dict] | None = None) -> pd.DataFrame:
+    """Remove rows listed in data/manual/excluded_malls.csv (name, reason): precinct or neighbourhood
+    names scraped from Wikipedia that are not a single mall and so cannot be geocoded to one."""
+    manual = _load_manual_csv("excluded_malls.csv")
+    if manual.empty:
+        return df
+    reasons = {dedupe_key(r.name): r.reason for r in manual.itertuples(index=False)}
+    drop = df["name"].map(lambda n: dedupe_key(n) in reasons)
+    for name in df.loc[drop, "name"]:
+        if qa is not None:
+            qa.append({"kind": "excluded", "name": name, "detail": reasons[dedupe_key(name)]})
+    return df[~drop].reset_index(drop=True)
+
+
+def refresh_operators(df: pd.DataFrame) -> pd.DataFrame:
+    """Re-run the operator clean-up on an existing registry: landlord aliases first, then the manual
+    operators table on top. Idempotent, so it is safe after any edit to data/manual/operator*.csv."""
+    df = df.copy()
+    aliases = load_operator_aliases()
+    df["operator"] = df["operator"].map(lambda op: clean_operator(op, aliases))
+    return apply_manual_operators(df)
+
+
 def build_registry(limit: int | None = None, sleep_s: float = 0.3) -> pd.DataFrame:
     malls = scrape_mall_list()
     if limit:
@@ -584,8 +607,9 @@ def build_registry(limit: int | None = None, sleep_s: float = 0.3) -> pd.DataFra
     print(f"\nMerged {len(merge_qa)} duplicate records; rejected "
           f"{sum(1 for q in qa if q['kind'] == 'geocode_rejected')} unverifiable geocodes.")
 
+    df = drop_excluded(df, qa)
+    df = add_existing_hpms(df, qa)          # before the operator overlay, so the added malls get it too
     df = apply_manual_operators(df)
-    df = add_existing_hpms(df, qa)
     df = apply_types(df)
     # Stable, unique ids (a slug collision gets a numeric suffix).
     counts: dict[str, int] = {}
@@ -614,6 +638,12 @@ if __name__ == "__main__":
     parser.add_argument("--refresh-types", action="store_true",
                         help="don't re-geocode: recompute the `type` column of the current malls.csv "
                              "(re-reads the three Wikipedia lists to see where each mall came from)")
+    parser.add_argument("--refresh-operators", action="store_true",
+                        help="don't re-scrape: re-apply data/manual/operator_aliases.csv and operators.csv "
+                             "to the operator column of the current malls.csv, and exit")
+    parser.add_argument("--drop-excluded", action="store_true",
+                        help="don't re-scrape: remove the malls listed in data/manual/excluded_malls.csv "
+                             "from the current malls.csv, and exit")
     parser.add_argument("--add-existing-hpms", action="store_true",
                         help="don't re-scrape: add malls from data/manual/existing_hpm.csv that "
                              "are missing from the current malls.csv, and exit")
@@ -631,6 +661,7 @@ if __name__ == "__main__":
         merged, qa_new = merge_duplicates(current)
         merged = merged.drop(columns=["canonical_title"])
         merged["postal_code"] = merged["postal_code"].astype("string")
+        validate.enforce("registry", *validate.validate_registry(merged))
         merged.to_csv(PROCESSED_DIR / "malls.csv", index=False)
         qa_path = PROCESSED_DIR / "registry_qa.csv"
         qa_old = pd.read_csv(qa_path) if qa_path.exists() else pd.DataFrame(columns=["kind", "name", "detail"])
@@ -658,10 +689,33 @@ if __name__ == "__main__":
 
         current["source"] = current.apply(source_of, axis=1)
         current = apply_types(current).drop(columns=["source"])
+        validate.enforce("registry", *validate.validate_registry(current))
         cols = ["mall_id", "name", "aliases", "type"] + [c for c in current.columns
                                                          if c not in ("mall_id", "name", "aliases", "type")]
         current[cols].to_csv(PROCESSED_DIR / "malls.csv", index=False)
         print(current["type"].value_counts().to_string())
+        raise SystemExit(0)
+
+    if args.drop_excluded:
+        current = pd.read_csv(PROCESSED_DIR / "malls.csv", dtype={"postal_code": str})
+        qa_new = []
+        updated = drop_excluded(current, qa_new)
+        validate.enforce("registry", *validate.validate_registry(updated))
+        updated.to_csv(PROCESSED_DIR / "malls.csv", index=False)
+        qa_path = PROCESSED_DIR / "registry_qa.csv"
+        qa_old = pd.read_csv(qa_path) if qa_path.exists() else pd.DataFrame(columns=["kind", "name", "detail"])
+        qa_old = qa_old[qa_old["kind"] != "excluded"]
+        pd.concat([qa_old, pd.DataFrame(qa_new, columns=["kind", "name", "detail"])]).to_csv(qa_path, index=False)
+        print(f"Excluded {len(current) - len(updated)} malls; registry now has {len(updated)}.")
+        raise SystemExit(0)
+
+    if args.refresh_operators:
+        current = pd.read_csv(PROCESSED_DIR / "malls.csv", dtype={"postal_code": str})
+        current["aliases"] = current["aliases"].fillna("")
+        updated = refresh_operators(current)
+        validate.enforce("registry", *validate.validate_registry(updated))
+        updated.to_csv(PROCESSED_DIR / "malls.csv", index=False)
+        print(f"Operators refreshed: {int((updated['operator'] != current['operator']).sum())} changed.")
         raise SystemExit(0)
 
     if args.add_existing_hpms:
@@ -670,7 +724,7 @@ if __name__ == "__main__":
         qa_new: list[dict] = []
         if "type" in current.columns:
             current["source"] = current["type"].map(lambda t: "estate" if t == "Neighbourhood centre" else "category")
-        updated = add_existing_hpms(current, qa_new)
+        updated = refresh_operators(add_existing_hpms(current, qa_new))
         if "type" in updated.columns:
             updated["type"] = updated["type"].fillna("Shopping mall")
         updated = updated.drop(columns=["source"], errors="ignore")
@@ -680,6 +734,7 @@ if __name__ == "__main__":
             counts[mid] = counts.get(mid, 0) + 1
             ids.append(mid if counts[mid] == 1 else f"{mid}-{counts[mid]}")
         updated["mall_id"] = ids
+        validate.enforce("registry", *validate.validate_registry(updated))
         updated.to_csv(PROCESSED_DIR / "malls.csv", index=False)
         qa_path = PROCESSED_DIR / "registry_qa.csv"
         qa_old = pd.read_csv(qa_path) if qa_path.exists() else pd.DataFrame(columns=["kind", "name", "detail"])

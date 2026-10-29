@@ -28,6 +28,13 @@ if not data_loader.data_available():
     st.stop()
 
 category_scores = data_loader.load_category_scores()
+
+
+@st.cache_data
+def _rank_stability(scores: pd.DataFrame, supply_w: dict, demand_w: dict, supply_block_weight: float) -> pd.DataFrame:
+    # 500 random re-weightings: cached so that moving a tier cut-off (which changes no rank) does not redo them
+    return scoring.rank_stability(scores, supply_weights=supply_w, demand_weights=demand_w,
+                                  supply_block_weight=supply_block_weight)
 default_index = data_loader.load_default_index()
 defaults = weights.default_settings()
 saved = weights.get_settings() or defaults
@@ -171,10 +178,7 @@ for tab, n in zip((tab1, tab2, tab3), (10, 20, 50)):
 
 with tab4:
     supply_w, demand_w = weights.effective_weights(settings)
-    stability = scoring.rank_stability(
-        category_scores, supply_weights=supply_w, demand_weights=demand_w,
-        supply_block_weight=supply_block_weight,
-    )
+    stability = _rank_stability(category_scores, supply_w, demand_w, supply_block_weight)
     st.caption(
         "500 random nudges to your current weights (each sub-weight varies, and the Supply share moves up to "
         "±10 points). A mall that stays in the Top 10 in nearly every nudge is a safe pick; one that drops in and "

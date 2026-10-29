@@ -103,3 +103,12 @@ def test_merge_duplicates_preserves_existing_aliases_and_partner_flag():
     assert rows.loc["Alpha Mall", "aliases"] == "Old Alias; Alpha Plaza"
     assert rows.loc["Alpha Mall", "hpb_partner"] == 1
     assert rows.loc["Lonely Mall", "aliases"] == "Keep Me"          # untouched malls keep their aliases
+
+
+def test_drop_excluded_removes_listed_precincts_and_logs_them(monkeypatch):
+    monkeypatch.setattr(reg, "_load_manual_csv",
+                        lambda f: pd.DataFrame({"name": ["Potong Pasir"], "reason": ["not a mall"]}))
+    df = pd.DataFrame({"name": ["Potong Pasir", "Jurong Point"]})
+    qa = []
+    assert reg.drop_excluded(df, qa)["name"].tolist() == ["Jurong Point"]
+    assert qa == [{"kind": "excluded", "name": "Potong Pasir", "detail": "not a mall"}]

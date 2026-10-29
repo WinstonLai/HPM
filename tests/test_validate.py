@@ -89,3 +89,10 @@ def test_enforce_raises_on_errors_and_not_on_warnings(capsys):
         assert "boom" in str(exc)
     else:
         raise AssertionError("expected ValueError")
+
+
+def test_a_mostly_na_engagement_gap_is_only_a_warning_for_a_partial_run():
+    n = 40
+    df = pd.DataFrame({"A_dining_score": np.linspace(0, 100, n), "engagement_gap_score": np.nan, "A_dining_count": np.arange(n)})
+    errors, warnings = validate.validate_scores(df, n, allow_constant=True)
+    assert errors == [] and any("n/a for" in w for w in warnings)

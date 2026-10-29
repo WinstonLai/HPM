@@ -122,7 +122,16 @@ _NOT_A_MALL = {
     "school", "primary", "secondary", "college", "university", "institute", "academy", "kindergarten",
     "preschool", "childcare", "nursery", "tuition", "hospital", "clinic", "polyclinic", "dental", "medical",
     "surgery", "church", "temple", "mosque", "mrt", "lrt", "station", "exit", "carpark", "council",
-    "police", "cemetery", "pte", "ltd",
+    "police", "cemetery", "pte", "ltd", "logistics", "warehouse", "depot", "industrial",
+    "esso", "shell", "caltex", "spc",
+}
+# Words that, standing BEFORE the mall's name, mean the building is a different
+# facility that borrows the name ("KWONG WAI SHIU HOSPITAL @ POTONG PASIR",
+# "ESSO UPPER ALJUNIED"). Narrower than _NOT_A_MALL on purpose: a clinic, tuition
+# centre or "... PTE LTD" ahead of the name is an ordinary tenant of the mall.
+_NOT_A_MALL_PREFIX = {
+    "hospital", "church", "temple", "mosque", "mrt", "lrt", "station", "exit", "carpark", "council",
+    "police", "cemetery", "logistics", "warehouse", "depot", "industrial", "esso", "shell", "caltex", "spc",
 }
 
 
@@ -169,7 +178,7 @@ def match_score(mall_name: str, candidate: dict) -> int:
         ends = pos + len(want) == len(have)
         starts = pos == 0
         rest = set(have[:pos] + have[pos + len(want):])
-        if ends or (starts and not rest & _NOT_A_MALL):
+        if (ends and not set(have[:pos]) & _NOT_A_MALL_PREFIX) or (starts and not rest & _NOT_A_MALL):
             return 2
     # Loosest tier: ignore only *trailing* generic words, so "Cheng San
     # Centre" ~ "Cheng San Shopping Centre" but "Tampines 1" does not match
