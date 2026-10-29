@@ -1,24 +1,23 @@
-"""Single source of truth for the HPM composite index formula, per the
-charter's "Composite Health Promoting Mall Index" section:
+"""Single source of truth for the composite Health Readiness Index formula:
 
-    HPM Index = Supply Readiness (70%) + Demand Opportunity (30%)
-    Supply Readiness  = Dining + Fitness + H365 Presence + Healthcare
+    Health Readiness Index = Supply Readiness (70%) + Demand Opportunity (30%)
+    Supply Readiness  = Dining + Fitness + Community Engagement + Healthcare
                          + Infrastructure + Partnership Readiness
     Demand Opportunity = Reach & Population + Accessibility + Engagement Gap
 
-The charter's per-category "illustrative weights" (A 25%, B 20%, C 15%,
-D 10%, E 10%, F 10% -- these six sum to 90, not 100, in the source document)
+The per-category reference weights (A 25%, B 20%, C 15%,
+D 10%, E 10%, F 10% -- these six sum to 90, not 100, in the original specification)
 are renormalised to sum to 100 *within* Supply Readiness, since Supply itself
 is only 70% of the final index and Category G ("Demand Potential") is
 represented by the separate Reach/Accessibility/Engagement-Gap block rather
 than as a seventh flat weight.
 
-Categories C (H365 & HPB Engagement) and F (Partnership Readiness) are
+Categories C (Community Engagement) and F (Partnership Readiness) are
 PROXIES -- no public dataset measures the real thing -- and are coarse (C only
 takes the values 0/50/100; F is non-zero for only a handful of malls). They
-therefore start below the charter's illustrative weights (C 15 -> 10,
+therefore start below the reference weights (C 15 -> 10,
 F 10 -> 5), and can be switched off entirely on the What-If Simulator via
-`exclude_proxies`. The charter values are kept in CHARTER_SUPPLY_WEIGHTS.
+`exclude_proxies`. The reference values are kept in REFERENCE_SUPPLY_WEIGHTS.
 
 A factor that is NaN for a mall means "not applicable" (e.g. Engagement Gap
 for a mall with no residents in its catchment); that factor is left out and
@@ -36,24 +35,24 @@ import numpy as np
 import pandas as pd
 
 # --- Supply Readiness sub-weights (renormalised to 100) ---
-# The charter's illustrative weights, for reference / the Methodology page.
-CHARTER_SUPPLY_WEIGHTS = {
+# The original reference weights, for reference / the Methodology page.
+REFERENCE_SUPPLY_WEIGHTS = {
     "A_dining_score": 25,
     "B_fitness_score": 20,
-    "C_engagement_score": 15,   # "H365 Presence" in the composite formula
+    "C_engagement_score": 15,   # community engagement in the composite formula
     "D_healthcare_score": 10,
     "E_infra_score": 10,
     "F_partnership_score": 10,
 }
-# Categories scored with a proxy rather than the metric the charter names.
+# Categories scored with a proxy rather than the metric their names suggest.
 PROXY_CATEGORIES = ("C_engagement_score", "F_partnership_score")
 _RAW_SUPPLY_WEIGHTS = {
     "A_dining_score": 25,
     "B_fitness_score": 20,
-    "C_engagement_score": 10,   # proxy (community-club proximity): charter 15
+    "C_engagement_score": 10,   # proxy (community-club proximity): reference 15
     "D_healthcare_score": 10,
     "E_infra_score": 10,
-    "F_partnership_score": 5,   # proxy (landlord portfolio size): charter 10
+    "F_partnership_score": 5,   # proxy (landlord portfolio size): reference 10
 }
 _SUPPLY_WEIGHT_SUM = sum(_RAW_SUPPLY_WEIGHTS.values())
 DEFAULT_SUPPLY_WEIGHTS = {k: v / _SUPPLY_WEIGHT_SUM * 100 for k, v in _RAW_SUPPLY_WEIGHTS.items()}
@@ -71,7 +70,7 @@ DEMAND_BLOCK_WEIGHT = 30
 CATEGORY_LABELS = {
     "A_dining_score": "Healthy Dining",
     "B_fitness_score": "Physical Activity",
-    "C_engagement_score": "H365 & HPB Engagement",
+    "C_engagement_score": "Community Engagement",
     "D_healthcare_score": "Healthcare",
     "E_infra_score": "Healthy Infrastructure",
     "F_partnership_score": "Partnership Readiness",
@@ -82,7 +81,7 @@ CATEGORY_LABELS = {
 
 TIERS = ["Bronze", "Silver", "Gold", "Platinum"]
 
-# Minimum HPM Index for each tier; anything below Silver is Bronze. Absolute
+# Minimum Health Readiness Index for each tier; anything below Silver is Bronze. Absolute
 # bands (not rank quartiles), so a tier count can actually change when the
 # weights or the mall list change. The index is itself relative -- every
 # category is scaled against the best malls in this list -- so these cut-offs
@@ -92,7 +91,7 @@ TIER_THRESHOLDS = {"Platinum": 50.0, "Gold": 35.0, "Silver": 20.0}
 
 
 def assign_tiers(index: pd.Series, thresholds: dict | None = None) -> pd.Series:
-    """Bronze/Silver/Gold/Platinum from absolute HPM Index cut-offs. Tied or
+    """Bronze/Silver/Gold/Platinum from absolute Health Readiness Index cut-offs. Tied or
     out-of-order cut-offs are allowed (the higher tier just goes unused)
     instead of raising, since the What-If Simulator lets users drag them."""
     t = thresholds or TIER_THRESHOLDS
@@ -134,7 +133,7 @@ def compute_index(
 ) -> pd.DataFrame:
     """Return a copy of `category_scores` with supply_score, demand_score,
     hpm_index, rank, and tier columns computed from the given weights
-    (falling back to the charter's illustrative defaults). Tiers use
+    (falling back to the reference defaults). Tiers use
     absolute cut-offs (`tier_thresholds`, default TIER_THRESHOLDS)."""
     supply_weights = supply_weights or DEFAULT_SUPPLY_WEIGHTS
     demand_weights = demand_weights or DEFAULT_DEMAND_WEIGHTS
@@ -159,8 +158,8 @@ def compute_index(
 
 
 def strategic_quadrant(row) -> str:
-    """2x2 matrix from the charter's 'Potential Enhancement' section:
-    High Readiness + High Demand -> Pioneer HPM
+    """2x2 matrix of readiness vs demand:
+    High Readiness + High Demand -> Pioneer
     High Readiness + Low Demand  -> Quick Wins
     Low Readiness  + High Demand -> Strategic Investment
     Low Readiness  + Low Demand  -> Future Monitoring
@@ -168,7 +167,7 @@ def strategic_quadrant(row) -> str:
     high_supply = row["supply_high"]
     high_demand = row["demand_high"]
     if high_supply and high_demand:
-        return "Pioneer HPM"
+        return "Pioneer"
     if high_supply and not high_demand:
         return "Quick Wins"
     if not high_supply and high_demand:
@@ -263,22 +262,22 @@ def _rank_corr(a: pd.Series, b: pd.Series) -> float:
 
 def scenario_comparison(category_scores: pd.DataFrame) -> pd.DataFrame:
     """How different would the shortlist be under other defensible readings of
-    the charter's weights? Each scenario is compared with the default ranking:
+    the reference weights? Each scenario is compared with the default ranking:
     `top10_overlap` is how many of its Top 10 are also in the default Top 10,
     `rank_corr` the Spearman correlation of the two index scores.
 
-    The charter is ambiguous: its category weights (25/20/15/10/10/10 + Demand
+    The reference weights are ambiguous: the category weights (25/20/15/10/10/10 + Demand
     Potential 10) sum to 100 with Supply at 90%, yet its composite formula says
-    Supply 70% / Demand 30%. "charter_literal" follows the first reading."""
+    Supply 70% / Demand 30%. "the literal reading" follows the first reading."""
     base = compute_index(category_scores)
     base_top = set(base.nsmallest(10, "rank")["mall_id"])
     scenarios = {
         "Default (70/30, proxies down-weighted)": {},
-        "Charter category weights, 70/30": {"supply_weights": CHARTER_SUPPLY_WEIGHTS},
+        "Reference category weights, 70/30": {"supply_weights": REFERENCE_SUPPLY_WEIGHTS},
         "Proxy categories (C, F) excluded": {"supply_weights": exclude_proxies(DEFAULT_SUPPLY_WEIGHTS)},
-        "Charter weights read literally (Supply 90 / Demand 10)": {
-            "supply_weights": CHARTER_SUPPLY_WEIGHTS, "supply_block_weight": 90, "demand_block_weight": 10},
-        "All six Supply categories equal": {"supply_weights": {k: 1 for k in CHARTER_SUPPLY_WEIGHTS}},
+        "Reference weights read literally (Supply 90 / Demand 10)": {
+            "supply_weights": REFERENCE_SUPPLY_WEIGHTS, "supply_block_weight": 90, "demand_block_weight": 10},
+        "All six Supply categories equal": {"supply_weights": {k: 1 for k in REFERENCE_SUPPLY_WEIGHTS}},
         "Supply only (ignore Demand)": {"supply_block_weight": 100, "demand_block_weight": 0},
     }
     rows = []
@@ -294,10 +293,10 @@ def scenario_comparison(category_scores: pd.DataFrame) -> pd.DataFrame:
 
 
 def component_auc(index_df: pd.DataFrame) -> pd.Series:
-    """AUC of each score column at separating existing HPMs from other malls
+    """AUC of each score column at separating reference malls from other malls
     (0.5 = no better than chance). Shows WHICH components make the index
-    resemble HPB's existing choices. Read with care: Healthy Dining is built
-    from HPB's own Healthier Dining datasets, so existing HPMs scoring well on
+    resemble the reference list. Read with care: Healthy Dining is built
+    from the national Healthier Dining datasets, so reference malls scoring well on
     it is partly circular (designated malls likely already take part in those
     programmes) rather than evidence of predictive power."""
     flag = index_df["is_existing_hpm"].fillna(0).astype(int) == 1
@@ -312,10 +311,10 @@ def component_auc(index_df: pd.DataFrame) -> pd.Series:
 
 
 def hpm_backtest(index_df: pd.DataFrame) -> dict | None:
-    """Do HPB's existing Health Promoting Malls rank higher than the rest?
+    """Do the reference malls rank higher than the rest?
     Needs `is_existing_hpm` (from data/manual/existing_hpm.csv). Returns None
     when no mall is flagged (or all are). AUC is the probability that a
-    randomly chosen existing HPM scores higher than a randomly chosen other
+    randomly chosen reference mall scores higher than a randomly chosen other
     mall (0.5 = no better than chance, 1.0 = perfect separation)."""
     if "is_existing_hpm" not in index_df.columns:
         return None

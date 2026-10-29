@@ -1,4 +1,4 @@
-"""Apply the charter's illustrative weights to category_scores.csv and write
+"""Apply the reference weights to category_scores.csv and write
 the default static ranking (rank, tier, Top 10/20/50, strategic quadrant) to
 data/processed/hpm_index.csv. This is the view shown before a user touches
 any What-If Simulator slider in the dashboard.

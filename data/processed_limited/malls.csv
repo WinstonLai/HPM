@@ -1,4 +1,4 @@
-mall_id,name,aliases,type,region,operator,hpb_partner,lat,lon,postal_code,address
+mall_id,name,aliases,type,region,operator,programme_partner,lat,lon,postal_code,address
 313-somerset,313@somerset,,Shopping mall,Central,Unknown,0,1.301014364040584,103.8383606644851,238895,313 ORCHARD ROAD 313 @ SOMERSET SINGAPORE 238895
 mtower,Alexandra Retail Centre,,Shopping mall,Central,Mapletree Commercial Trust,0,1.27414893629255,103.8013994166651,,460 ALEXANDRA ROAD ALEXANDRA RETAIL CENTRE (ARC)
 bugis-junction,Bugis Junction,,Shopping mall,Central,CapitaLand,0,1.299112874758746,103.8554111737572,188021,200 VICTORIA STREET BUGIS JUNCTION SINGAPORE 188021

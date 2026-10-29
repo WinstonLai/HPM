@@ -17,11 +17,11 @@ import scoring  # noqa: E402
 import weights  # noqa: E402
 from safe_text import escape_html  # noqa: E402
 
-st.set_page_config(page_title="HPM Readiness Dashboard", page_icon="🛍️", layout="wide")
+st.set_page_config(page_title="Mall Health Readiness Dashboard", page_icon="🛍️", layout="wide")
 
-st.title("🛍️ Health Promoting Mall (HPM) Readiness Dashboard")
+st.title("🛍️ Mall Health Readiness Dashboard")
 st.caption(
-    "HPB Health Promoting Town initiative · Executive Summary · "
+    "How ready are Singapore's shopping malls to support healthier living? · Executive Summary · "
     "data pulled from data.gov.sg, OneMap and Wikipedia — see the README for full source citations."
 )
 
@@ -43,15 +43,15 @@ if age is not None and age > STALE_AFTER_DAYS:
 
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Total malls assessed", len(df))
-col2.metric("Average HPM Index", f"{df['hpm_index'].mean():.1f} / 100")
+col2.metric("Average Health Readiness Index", f"{df['hpm_index'].mean():.1f} / 100")
 col3.metric("Malls in Gold/Platinum tier", int(df["tier"].isin(["Gold", "Platinum"]).sum()),
             help=f"Tiers use fixed cut-offs (Platinum ≥ {scoring.TIER_THRESHOLDS['Platinum']:.0f}, "
                  f"Gold ≥ {scoring.TIER_THRESHOLDS['Gold']:.0f}, Silver ≥ {scoring.TIER_THRESHOLDS['Silver']:.0f}), "
                  "so this count moves when the weights or mall list change.")
 if "is_existing_hpm" in df.columns and int(df["is_existing_hpm"].sum()) > 0:
     n_top = int(df.loc[df["rank"] <= 20, "is_existing_hpm"].sum())
-    col4.metric("Existing HPMs in the Top 20", f"{n_top} of 20",
-                help="How many of the 20 highest-ranked malls HPB has already designated as HPMs.")
+    col4.metric("Reference malls in the Top 20", f"{n_top} of 20",
+                help="How many of the 20 highest-ranked malls are on the reference list of malls already known for health-promotion programmes.")
 else:
     col4.metric("Regions covered", df["region"].nunique())
 
@@ -65,8 +65,8 @@ with left:
     st.dataframe(
         top10[["rank", "name", "region", "operator", "hpm_index", "tier"]]
         .rename(columns={"name": "Mall", "region": "Region", "operator": "Operator",
-                          "hpm_index": "HPM Index", "tier": "Tier", "rank": "Rank"})
-        .style.format({"HPM Index": "{:.1f}"}),
+                          "hpm_index": "Health Readiness Index", "tier": "Tier", "rank": "Rank"})
+        .style.format({"Health Readiness Index": "{:.1f}"}),
         hide_index=True,
         width="stretch",
     )
@@ -103,7 +103,7 @@ else:
         orientation="h",
         color="avg_index",
         color_continuous_scale="Tealgrn",
-        labels={"operator": "", "malls": "Number of Malls", "avg_index": "Avg HPM Index"},
+        labels={"operator": "", "malls": "Number of Malls", "avg_index": "Avg Health Readiness Index"},
     )
     fig2.update_layout(margin=dict(l=0, r=0, t=10, b=0), height=max(300, 34 * len(op_summary) + 80))
     st.plotly_chart(fig2, width="stretch")

@@ -6,7 +6,7 @@ returns {"code":0,"data":{"url": "<time-limited S3 link>"}}. No API key is
 required for this volume of one-off ETL traffic, but unauthenticated callers
 are rate-limited to ~5 requests/minute, so calls are throttled and retried.
 
-Some agency exports (e.g. HPB Gyms@SG, MOH CHAS Clinics) still carry legacy
+Some agency exports (e.g. Gyms@SG, MOH CHAS Clinics) still carry legacy
 KML-derived GeoJSON where all attributes are packed into a single
 `Description` HTML table rather than clean `properties` keys;
 `feature_attributes` normalises both shapes into a flat dict.

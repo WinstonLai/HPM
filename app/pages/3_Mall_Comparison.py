@@ -14,7 +14,7 @@ import scoring  # noqa: E402
 import weights  # noqa: E402
 from safe_text import escape_html, escape_md  # noqa: E402
 
-st.set_page_config(page_title="Mall Comparison | HPM Dashboard", page_icon="🕸️", layout="wide")
+st.set_page_config(page_title="Mall Comparison | Mall Health Dashboard", page_icon="🕸️", layout="wide")
 st.title("🕸️ Mall Comparison")
 
 if not data_loader.data_available():
@@ -66,7 +66,7 @@ st.subheader("Strengths and weaknesses")
 st.caption(
     "Compared with **all malls** (percentile among the "
     f"{len(df)}), not on the raw 0–100 score — most malls score 0 on some categories, so \"lowest score\" says little. "
-    "The two proxy categories (H365 & HPB Engagement, Partnership Readiness) are left out of the verdicts "
+    "The two proxy categories (Community Engagement, Partnership Readiness) are left out of the verdicts "
     "because they are stand-ins, not real measurements."
 )
 # Share of malls scoring strictly lower: rank(pct=True) averages ties, which would call a mall
@@ -82,7 +82,7 @@ for col, name in zip(cols, names):
     worst = min(eligible, key=eligible.get)
     with col:
         st.markdown(f"**{escape_md(name)}**")
-        st.metric("HPM Index", f"{row['hpm_index']:.1f}", help=f"Rank {int(row['rank'])} · Tier: {row['tier']}")
+        st.metric("Health Readiness Index", f"{row['hpm_index']:.1f}", help=f"Rank {int(row['rank'])} · Tier: {row['tier']}")
         st.success(f"Strongest: {LABELS[best]} — better than {eligible[best]:.0f}% of malls")
         st.warning(f"Weakest: {LABELS[worst]} — better than {eligible[worst]:.0f}% of malls")
 

@@ -1,10 +1,10 @@
 """Join every raw amenity/context dataset to the mall registry and compute
-one normalised 0-100 score per HPM category (A-G) per mall, plus the raw
+one normalised 0-100 score per category (A-G) per mall, plus the raw
 counts each score is built from (kept for transparency in the dashboard).
 
 Matching strategy
 ------------------
-Datasets that carry a clean building-name field (e.g. HPB's Healthier
+Datasets that carry a clean building-name field (e.g. the Healthier
 Eateries / CHAS Clinics `BUILDING_NAME`) are matched to a mall first by
 normalised building-name equality, then everything (matched or not) is
 additionally checked by straight-line distance so amenities that are on-site
@@ -16,13 +16,13 @@ Radii (deliberately generous for a POC without exact building footprints):
   CATCHMENT_RADIUS_M - population / MRT / bus for demand-side accessibility
 
 Every raw count is then min-max normalised to 0-100 across the mall
-population. This is documented as a simplification: the charter's own
-worked example normalises by dividing by each mall's *total* tenant count
+population. This is documented as a simplification: a share-based
+score would normalise by dividing by each mall's *total* tenant count
 (e.g. "% of F&B outlets in HDP"), which requires a full per-mall tenant
 directory that is not publicly available. Min-max scaling is only a linear
 rescale of the raw count: it makes categories comparable so they can be
-weighted and summed, but it does NOT remove the size bias the charter is
-warning about (within a category the ranking equals the raw-count ranking).
+weighted and summed, but it does NOT remove the size bias a share-based score would
+avoid (within a category the ranking equals the raw-count ranking).
 """
 from __future__ import annotations
 
@@ -56,7 +56,7 @@ MANUAL_DIR = Path(__file__).resolve().parent.parent / "data" / "manual"
 
 # NParks' Park Facilities file lists every piece of park furniture (mostly
 # carparks, noticeboards, access points, toilets, ...). Only these classes
-# count towards Healthy Infrastructure: the charter's children's playgrounds
+# count towards Healthy Infrastructure: children's playgrounds
 # and fitness corners, water refill points (DRINKING FOUNTAIN) and wellness
 # facilities (FOOT RELAX).
 PARK_FACILITY_CLASSES = {"PLAYGROUND", "FITNESS AREA", "DRINKING FOUNTAIN", "FOOT RELAX"}
@@ -110,7 +110,7 @@ def _number_spellings(key: str) -> set[str]:
 
 def count_by_address_text(malls: pd.DataFrame, addresses: pd.Series) -> np.ndarray:
     """Count matches for datasets published as a plain CSV with a free-text
-    address column and no coordinates (e.g. HPB's Healthier Dining Partners,
+    address column and no coordinates (e.g. Healthier Dining Partners,
     HSA's Licensed Pharmacies) -- normalise both sides and word-boundary
     substring-match the mall's full name inside the outlet address. The
     padding-based word-boundary check (not a length cutoff) is what guards
@@ -153,7 +153,7 @@ def load_deduped_partner_addresses(eateries: pd.DataFrame) -> pd.Series:
     """Addresses of Healthier Dining Partners outlets, minus outlets already
     counted as Healthier Eateries.
 
-    The two HPB datasets describe largely the same outlets (500+ shared
+    The two datasets describe largely the same outlets (500+ shared
     postal codes), so summing them double-counts. An outlet is treated as the
     same one when postal code and brand match (eatery NAME is "<Brand> -
     <location>"; partners have a Brand_Name column). The partners file also
@@ -513,8 +513,8 @@ def name_key(name: str) -> str:
 
 def flag_existing_hpm(malls: pd.DataFrame) -> pd.Series:
     """1 for malls listed in data/manual/existing_hpm.csv (columns: name,
-    source, optional match_as) -- HPB's existing Health Promoting Malls. The
-    file is supplied by HPB CIP; with none, every mall is 0 and the dashboard
+    source, optional match_as) -- the reference malls. The
+    file is curated by hand; with none, every mall is 0 and the dashboard
     says the index cannot be validated. Matched on name or any alias. The
     registry build adds any listed mall it does not already have
     (build_mall_registry.add_existing_hpms), so every entry should match."""
@@ -528,7 +528,7 @@ def flag_existing_hpm(malls: pd.DataFrame) -> pd.Series:
         if not rec.name.strip():
             continue
         # `match_as` is the spelling used in the registry when it differs
-        # from the one HPB uses ("Singpost Centre" -> "SingPost").
+        # from the one the list uses ("Singpost Centre" -> "SingPost").
         for spelling in (rec.name, getattr(rec, "match_as", "")):
             if spelling.strip():
                 wanted[name_key(spelling)] = rec.name
@@ -595,8 +595,8 @@ def compute_untapped_demand(malls: pd.DataFrame, pop_catchment: np.ndarray,
 def compute_category_f(malls: pd.DataFrame) -> pd.Series:
     """Partnership Readiness proxy: portfolio scale of the mall's landlord
     group (a larger chain is more likely to have centralised CSR/health-
-    programme capacity) plus a bonus for malls flagged `hpb_partner` -- a
-    confirmed HPB partnership, supplied via data/manual/operators.csv (the
+    programme capacity) plus a bonus for malls flagged `programme_partner` -- a
+    confirmed health-programme partnership, supplied via data/manual/operators.csv (the
     registry build copies the flag into malls.csv). The operator column has
     already been merged into landlord groups by the registry build (see
     data/manual/operator_aliases.csv), so e.g. all CapitaLand trust names
@@ -606,8 +606,8 @@ def compute_category_f(malls: pd.DataFrame) -> pd.Series:
     chain_size = chain_size.where(malls["operator"] != "Unknown", 1)
     chain_score = min_max_normalize(chain_size)
 
-    if "hpb_partner" in malls.columns:
-        partner = malls["hpb_partner"].fillna(0).astype(float) > 0
+    if "programme_partner" in malls.columns:
+        partner = malls["programme_partner"].fillna(0).astype(float) > 0
     else:  # registry built before the manual operators table existed
         partner = malls["name"].map(normalize_name) == normalize_name("Downtown East")
     bonus = partner.astype(float) * 20
@@ -670,7 +670,7 @@ def build_category_scores(allow_missing: bool = False) -> pd.DataFrame:
 
     print("Category A - Healthy Dining Ecosystem (incl. supermarkets) ...")
     dining = load_points("healthier_eateries.geojson")
-    # The HPB file repeats some outlets verbatim (same name, postal code and
+    # The file repeats some outlets verbatim (same name, postal code and
     # coordinates) -- count each outlet once.
     dining = dining.drop_duplicates(
         subset=[c for c in ("ADDRESSPOSTALCODE", "NAME", "lat", "lon") if c in dining.columns]
@@ -689,9 +689,9 @@ def build_category_scores(allow_missing: bool = False) -> pd.DataFrame:
     )
     out["A_dining_score"] = min_max_normalize(out["A_dining_count"])
 
-    # Diagnostics for the charter's "% of F&B outlets" metric. NOT part of the
+    # Diagnostics for a "% of F&B outlets" metric. NOT part of the
     # index: OpenStreetMap's F&B coverage inside malls is patchy, so the share
-    # can only be trusted once HPB CIP has reviewed it (see the Methodology page).
+    # can only be trusted once it has been reviewed (see the Methodology page).
     fnb = load_points("osm_fnb.geojson")
     out["A_hdp_outlets"] = eatery_counts
     out["A_fnb_osm_count"] = count_nearby(malls, fnb, ON_SITE_RADIUS_M, exclusive=True)
@@ -703,7 +703,7 @@ def build_category_scores(allow_missing: bool = False) -> pd.DataFrame:
         load_points("gyms_at_sg.geojson"),
         load_points("sportsg_sport_facilities.geojson"),
     ], ignore_index=True)
-    # Gyms@SG only lists HPB-registered gyms; OpenStreetMap adds commercial
+    # Gyms@SG only lists registered gyms; OpenStreetMap adds commercial
     # gyms and studios. OSM points duplicating a listed venue are dropped.
     osm_fitness = dedupe_against(load_points("osm_fitness.geojson"), official_fitness, OSM_DEDUPE_M)
     fitness = pd.concat([official_fitness, osm_fitness], ignore_index=True)
@@ -711,7 +711,7 @@ def build_category_scores(allow_missing: bool = False) -> pd.DataFrame:
     out["B_fitness_count"] = count_nearby(malls, fitness, ON_SITE_RADIUS_M, exclusive=True)
     out["B_fitness_score"] = min_max_normalize(out["B_fitness_count"])
 
-    print("Category C - H365 & HPB Engagement (community-club proxy) ...")
+    print("Category C - Community Engagement (community-club proxy) ...")
     community = load_points("community_clubs.geojson")
     out["C_engagement_count"] = count_nearby(malls, community, NEARBY_RADIUS_M)
     out["C_engagement_score"] = min_max_normalize(out["C_engagement_count"])
@@ -748,7 +748,7 @@ def build_category_scores(allow_missing: bool = False) -> pd.DataFrame:
     out["senior_pop_catchment"] = senior_pop
 
     # Reach & Population uses a distance-weighted catchment instead, and adds
-    # workers (the charter's "worker population") so CBD / airport / office
+    # workers ("worker population") so CBD / airport / office
     # malls are not scored as if nobody were ever there.
     sub = build_subzone_table(subzone_centroids)
     reach = kernel_catchments(malls, sub, ["total_pop", "senior_pop", "workers"])
@@ -775,7 +775,7 @@ def build_category_scores(allow_missing: bool = False) -> pd.DataFrame:
         min_max_normalize(out["mrt_access_index"]) * 0.5 + min_max_normalize(out["bus_access_index"]) * 0.5
     )
 
-    # Engagement Gap ("untapped demand"): charter lists "low healthy dining
+    # Engagement Gap ("untapped demand"): "low healthy dining
     # exposure" and "under-served health promotion locations". Scored as how
     # few health-promoting amenities the catchment has per resident -- this is
     # deliberately independent of Category C (community clubs) so the demand

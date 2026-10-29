@@ -29,12 +29,12 @@ Registry quality controls (each one fixes a defect found in review):
     index, and `postal_code` is written as a zero-padded string.
   * Operator names go through data/manual/operator_aliases.csv (merges e.g.
     "CapitaMall Trust" / "CapitaLand Mall Trust" into one landlord group and
-    blanks non-landlords), and data/manual/operators.csv lets HPB CIP supply
+    blanks non-landlords), and data/manual/operators.csv lets the maintainers supply
     authoritative landlord / partnership facts per mall.
 
 This is the "consolidate mall amenity information into a common repository...
 may include culling information from publicly available sources" deliverable
-from the charter's Milestone 1.
+from the project's first milestone.
 """
 from __future__ import annotations
 
@@ -390,8 +390,8 @@ def merge_duplicates(df: pd.DataFrame) -> tuple[pd.DataFrame, list[dict]]:
         # Aliases already recorded on any member are kept, plus the merged names.
         known_aliases = [a for v in (df["aliases"].iloc[members] if "aliases" in df.columns else [])
                          for a in str(v if isinstance(v, str) else "").split("; ") if a]
-        if "hpb_partner" in df.columns:
-            rep["hpb_partner"] = int(df["hpb_partner"].iloc[members].fillna(0).astype(int).max())
+        if "programme_partner" in df.columns:
+            rep["programme_partner"] = int(df["programme_partner"].iloc[members].fillna(0).astype(int).max())
         if len(members) > 1:
             others = df.iloc[members[1:]]
             rep["aliases"] = "; ".join(dict.fromkeys(known_aliases + others["name"].tolist()))
@@ -413,8 +413,8 @@ def merge_duplicates(df: pd.DataFrame) -> tuple[pd.DataFrame, list[dict]]:
 
 def add_existing_hpms(df: pd.DataFrame, qa: list[dict]) -> pd.DataFrame:
     """Add every mall in data/manual/existing_hpm.csv that the Wikipedia
-    sources missed. HPB's own list is better evidence that something is a
-    mall than Wikipedia's categories (14 of the 48 existing HPMs were absent
+    sources missed. The reference list is better evidence that something is a
+    mall than Wikipedia's categories (14 of the 48 reference malls were absent
     from the scraped registry: Terminal 3, United Square, KINEX, ...). New
     malls are geocoded with the same name validation as everything else; the
     operator stays "Unknown" because there is no article to read it from."""
@@ -433,17 +433,17 @@ def add_existing_hpms(df: pd.DataFrame, qa: list[dict]) -> pd.DataFrame:
             continue
         geo, how = resolve_geocode(display, overrides)
         if not geo:
-            print(f"  [reject] existing HPM could not be geocoded: {display}")
+            print(f"  [reject] reference mall could not be geocoded: {display}")
             qa.append({"kind": "existing_hpm_not_geocoded", "name": display,
                        "detail": "listed in existing_hpm.csv but no OneMap candidate matched; add a geocode override"})
             continue
-        print(f"  [added existing HPM] {display} -> ({geo['lat']:.4f},{geo['lon']:.4f}) [{how}]")
+        print(f"  [added reference mall] {display} -> ({geo['lat']:.4f},{geo['lon']:.4f}) [{how}]")
         qa.append({"kind": "existing_hpm_added", "name": display,
                    "detail": f"missing from the Wikipedia registry; added from existing_hpm.csv ({geo.get('building')})"})
         known.add(dedupe_key(display))
         new_rows.append({
             "mall_id": slugify(display), "name": clean_name(display), "aliases": "", "source": "existing_hpm",
-            "region": "Unknown", "operator": "Unknown", "hpb_partner": 0,
+            "region": "Unknown", "operator": "Unknown", "programme_partner": 0,
             "lat": geo["lat"], "lon": geo["lon"], "postal_code": geo.get("postal_code"),
             "address": geo.get("address"),
         })
@@ -472,7 +472,7 @@ def load_manual_types() -> dict[str, str]:
 
 def classify_type(name: str, source: str, manual: dict[str, str]) -> str:
     """Best-effort type, so non-malls can be filtered out of a mall ranking.
-    Order: hand-curated override; HPB-designated (always a mall); market /
+    Order: hand-curated override; on the reference list (always a mall); market /
     hawker keywords; "Town/Regional Centre" (an HDB town node, not a
     building); a mall that only appears in the "Housing estate commercial
     areas" list (a neighbourhood centre); otherwise a shopping mall. The
@@ -499,11 +499,11 @@ def apply_types(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def apply_manual_operators(df: pd.DataFrame) -> pd.DataFrame:
-    """Overlay data/manual/operators.csv (name, landlord_group, hpb_partner,
-    source) onto the scraped operators. This is where HPB CIP's authoritative
+    """Overlay data/manual/operators.csv (name, landlord_group, programme_partner,
+    source) onto the scraped operators. This is where authoritative
     landlord and partnership facts go; scraped values are only the fallback."""
     df = df.copy()
-    df["hpb_partner"] = 0
+    df["programme_partner"] = 0
     manual = _load_manual_csv("operators.csv")
     if manual.empty:
         return df
@@ -515,8 +515,8 @@ def apply_manual_operators(df: pd.DataFrame) -> pd.DataFrame:
             continue
         if rec.landlord_group.strip():
             df.at[idx, "operator"] = rec.landlord_group.strip()
-        if rec.hpb_partner.strip() in ("1", "true", "True", "yes"):
-            df.at[idx, "hpb_partner"] = 1
+        if rec.programme_partner.strip() in ("1", "true", "True", "yes"):
+            df.at[idx, "programme_partner"] = 1
     return df
 
 
@@ -623,7 +623,7 @@ def build_registry(limit: int | None = None, sleep_s: float = 0.3) -> pd.DataFra
     validate.enforce("registry", *validate.validate_registry(df))
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(qa, columns=["kind", "name", "detail"]).to_csv(PROCESSED_DIR / "registry_qa.csv", index=False)
-    return df[["mall_id", "name", "aliases", "type", "region", "operator", "hpb_partner",
+    return df[["mall_id", "name", "aliases", "type", "region", "operator", "programme_partner",
                "lat", "lon", "postal_code", "address"]].reset_index(drop=True)
 
 

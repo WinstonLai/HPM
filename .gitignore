@@ -4,5 +4,5 @@ __pycache__/
 data/raw/
 .streamlit/secrets.toml
 .DS_Store
-Health Promoting Mall Readiness Assessment Project Charter*.docx
+*.docx
 data/processed_limited/

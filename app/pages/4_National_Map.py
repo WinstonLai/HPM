@@ -12,7 +12,7 @@ import data_loader  # noqa: E402
 import weights  # noqa: E402
 from safe_text import escape_html, escape_md  # noqa: E402
 
-st.set_page_config(page_title="National Map | HPM Dashboard", page_icon="🗺️", layout="wide")
+st.set_page_config(page_title="National Map | Mall Health Dashboard", page_icon="🗺️", layout="wide")
 st.title("🗺️ National Map")
 
 if not data_loader.data_available():
@@ -46,8 +46,8 @@ with left:
         horizontal=True,
     )
 with right:
-    highlight_hpm = st.checkbox("Ring existing HPMs", value=has_hpm_list, disabled=not has_hpm_list,
-                                help=None if has_hpm_list else "No existing-HPM list loaded.")
+    highlight_hpm = st.checkbox("Ring reference malls", value=has_hpm_list, disabled=not has_hpm_list,
+                                help=None if has_hpm_list else "No reference-mall list loaded.")
 
 shown = df
 if shortlist_choice == "Top 10 candidates":
@@ -98,12 +98,12 @@ st.markdown(
     f"<div style='display:flex;align-items:center;gap:8px;font-size:0.85rem'>"
     f"<span>{lo:.0f}</span>"
     f"<div style='height:12px;width:240px;border:1px solid #888;background:linear-gradient(90deg,{gradient})'></div>"
-    f"<span>{hi:.0f}</span><span style='margin-left:8px'>HPM Index (low → high)</span>"
+    f"<span>{hi:.0f}</span><span style='margin-left:8px'>Health Readiness Index (low → high)</span>"
     "<span style='margin-left:16px;display:inline-flex;align-items:center;gap:4px'>"
     "<span style='width:8px;height:8px;border-radius:50%;border:1px solid #888;display:inline-block'></span>→"
     "<span style='width:16px;height:16px;border-radius:50%;border:1px solid #888;display:inline-block'></span>"
     " marker size = score</span>"
-    + ("<span style='margin-left:16px;color:#e67800'>◯ existing HPM</span>" if highlight_hpm else "")
+    + ("<span style='margin-left:16px;color:#e67800'>◯ reference mall</span>" if highlight_hpm else "")
     + "</div>",
     unsafe_allow_html=True,
 )
@@ -114,7 +114,7 @@ if focus != "(whole of Singapore)":
     sel = shown[shown["name"] == focus].iloc[0]
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Rank", f"{int(sel['rank'])} of {len(df)}")
-    c2.metric("HPM Index", f"{sel['hpm_index']:.1f}", help=f"Tier: {sel['tier']}")
+    c2.metric("Health Readiness Index", f"{sel['hpm_index']:.1f}", help=f"Tier: {sel['tier']}")
     c3.metric("Supply", f"{sel['supply_score']:.1f}")
     c4.metric("Demand", f"{sel['demand_score']:.1f}")
-    st.caption(f"{escape_md(sel['region'])} · {escape_md(sel['operator'])}" + (" · existing HPM" if has_hpm_list and sel["is_existing_hpm"] == 1 else ""))
+    st.caption(f"{escape_md(sel['region'])} · {escape_md(sel['operator'])}" + (" · reference mall" if has_hpm_list and sel["is_existing_hpm"] == 1 else ""))

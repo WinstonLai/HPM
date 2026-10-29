@@ -17,8 +17,8 @@ def make_scores(n=40, seed=0):
 
 def test_default_supply_weights_sum_to_100_and_proxies_are_down_weighted():
     assert sum(sf.DEFAULT_SUPPLY_WEIGHTS.values()) == pytest.approx(100)
-    assert sf.DEFAULT_SUPPLY_WEIGHTS["C_engagement_score"] < sf.CHARTER_SUPPLY_WEIGHTS["C_engagement_score"] / 90 * 100
-    assert sf.DEFAULT_SUPPLY_WEIGHTS["F_partnership_score"] < sf.CHARTER_SUPPLY_WEIGHTS["F_partnership_score"] / 90 * 100
+    assert sf.DEFAULT_SUPPLY_WEIGHTS["C_engagement_score"] < sf.REFERENCE_SUPPLY_WEIGHTS["C_engagement_score"] / 90 * 100
+    assert sf.DEFAULT_SUPPLY_WEIGHTS["F_partnership_score"] < sf.REFERENCE_SUPPLY_WEIGHTS["F_partnership_score"] / 90 * 100
 
 
 def test_compute_index_ranks_are_unique_and_sorted():
@@ -81,7 +81,7 @@ def test_strategic_quadrant_uses_median_by_default_and_fixed_cuts_on_request():
     assert 0.4 < med["supply_high"].mean() < 0.62
     fixed = sf.add_strategic_quadrant(df, supply_cut=101, demand_cut=101)
     assert (fixed["quadrant"] == "Future Monitoring").all()
-    assert set(med["quadrant"]) <= {"Pioneer HPM", "Quick Wins", "Strategic Investment", "Future Monitoring"}
+    assert set(med["quadrant"]) <= {"Pioneer", "Quick Wins", "Strategic Investment", "Future Monitoring"}
 
 
 def test_rank_stability_is_deterministic_and_bounded():
