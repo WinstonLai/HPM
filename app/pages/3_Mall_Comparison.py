@@ -69,7 +69,9 @@ st.caption(
     "The two proxy categories (H365 & HPB Engagement, Partnership Readiness) are left out of the verdicts "
     "because they are stand-ins, not real measurements."
 )
-percentile = df[RADAR_COLS].rank(pct=True) * 100
+# Share of malls scoring strictly lower: rank(pct=True) averages ties, which would call a mall
+# with no gyms "better than 24% of malls" when 47% of malls also have none.
+percentile = (df[RADAR_COLS].rank(method="min") - 1) / len(df) * 100
 percentile.index = df["name"]
 cols = st.columns(len(names))
 for col, name in zip(cols, names):

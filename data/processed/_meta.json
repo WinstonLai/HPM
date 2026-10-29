@@ -1,7 +1,7 @@
 {
   "category_scores": {
-    "built_at": "2026-10-20T09:04:12+00:00",
-    "git_commit": "f1f0298",
+    "built_at": "2026-10-29T10:10:05+00:00",
+    "git_commit": "cec1afa",
     "n_malls": 187,
     "parameters": {
       "bus_radius_m": 400,
@@ -21,14 +21,14 @@
     }
   },
   "index": {
-    "built_at": "2026-10-20T09:04:12+00:00",
+    "built_at": "2026-10-29T10:10:06+00:00",
     "demand_block_weight": 30,
     "demand_weights": {
       "accessibility_score": 33.33,
       "engagement_gap_score": 33.33,
       "reach_population_score": 33.33
     },
-    "git_commit": "f1f0298",
+    "git_commit": "cec1afa",
     "n_malls": 187,
     "supply_block_weight": 70,
     "supply_weights": {
@@ -48,133 +48,133 @@
       "Causeway Point",
       "NEX",
       "AMK Hub",
-      "Waterway Point",
-      "The Seletar Mall",
+      "Tanjong Pagar Plaza",
       "Northpoint City",
+      "The Seletar Mall",
       "Junction 8",
-      "Tiong Bahru Plaza",
-      "City Square Mall",
-      "Jurong Point"
+      "Lot 1",
+      "Jurong Point",
+      "Waterway Point"
     ]
   },
   "raw_data": {
-    "built_at": "2026-10-20T09:04:12+00:00",
+    "built_at": "2026-10-29T10:10:05+00:00",
     "files": {
       "bicycle_racks.geojson": {
         "bytes": 240638,
-        "fetched": "2026-09-04T15:38:52+00:00",
+        "fetched": "2026-10-23T04:40:54+00:00",
         "rows": 396,
         "sha256": "a9b25aa7000eb306"
       },
       "bus_stops.geojson": {
-        "bytes": 1886415,
-        "fetched": "2026-09-04T14:34:05+00:00",
+        "bytes": 1886647,
+        "fetched": "2026-10-23T04:41:46+00:00",
         "rows": 5205,
-        "sha256": "23cb5ce083e3573a"
+        "sha256": "ea16db2e53038b2b"
       },
       "chas_clinics.geojson": {
         "bytes": 1644760,
-        "fetched": "2026-09-04T14:32:34+00:00",
+        "fetched": "2026-10-23T04:40:02+00:00",
         "rows": 1193,
         "sha256": "d25ed5c5b460d2c1"
       },
       "community_clubs.geojson": {
-        "bytes": 93676,
-        "fetched": "2026-09-04T14:32:21+00:00",
+        "bytes": 93712,
+        "fetched": "2026-10-23T04:39:49+00:00",
         "rows": 128,
-        "sha256": "6493f3f057b89673"
+        "sha256": "e35b4088313258e8"
       },
       "gyms_at_sg.geojson": {
         "bytes": 212034,
-        "fetched": "2026-09-04T14:31:55+00:00",
+        "fetched": "2026-10-23T04:39:23+00:00",
         "rows": 159,
         "sha256": "2d5de3b1d0d590d2"
       },
       "healthier_dining_fnb_partners.csv": {
-        "bytes": 546213,
-        "fetched": "2026-09-04T14:31:42+00:00",
-        "rows": 2504,
-        "sha256": "0608521e6a2ed055"
+        "bytes": 704705,
+        "fetched": "2026-10-23T04:38:57+00:00",
+        "rows": 3799,
+        "sha256": "2052ef28572d39c3"
       },
       "healthier_eateries.geojson": {
         "bytes": 1467826,
-        "fetched": "2026-09-04T14:31:29+00:00",
+        "fetched": "2026-10-23T04:38:45+00:00",
         "rows": 1829,
         "sha256": "0611cdc814a4e8a3"
       },
       "licensed_pharmacies.csv": {
         "bytes": 27890,
-        "fetched": "2026-09-04T14:32:47+00:00",
+        "fetched": "2026-10-23T04:40:15+00:00",
         "rows": 243,
         "sha256": "091dd08bf033d254"
       },
       "mrt_station_exits.geojson": {
-        "bytes": 213057,
-        "fetched": "2026-09-04T14:33:52+00:00",
+        "bytes": 213480,
+        "fetched": "2026-10-23T04:41:33+00:00",
         "rows": 613,
-        "sha256": "a7eaa90f30991dc0"
+        "sha256": "7a57cb14cf7c6212"
       },
       "osm_fitness.geojson": {
-        "bytes": 102902,
-        "fetched": "2026-10-20T08:20:22+00:00",
-        "rows": 506,
-        "sha256": "398c72a86b977d58"
+        "bytes": 103121,
+        "fetched": "2026-10-23T04:42:44+00:00",
+        "rows": 507,
+        "sha256": "e776c7f6ffb85d71"
       },
       "osm_fnb.geojson": {
-        "bytes": 1766165,
-        "fetched": "2026-10-20T08:21:09+00:00",
-        "rows": 8834,
-        "sha256": "d94149a98de2f047"
+        "bytes": 1766530,
+        "fetched": "2026-10-23T04:43:14+00:00",
+        "rows": 8836,
+        "sha256": "36788cef9670d8e9"
       },
       "park_facilities.geojson": {
-        "bytes": 6090549,
-        "fetched": "2026-09-04T14:33:13+00:00",
-        "rows": 14751,
-        "sha256": "d76a5d08d834ae86"
+        "bytes": 6091834,
+        "fetched": "2026-10-23T04:40:42+00:00",
+        "rows": 14754,
+        "sha256": "2f26adbd105ebdaf"
       },
       "parks_at_sg.geojson": {
         "bytes": 79121,
-        "fetched": "2026-09-04T14:33:00+00:00",
+        "fetched": "2026-10-23T04:40:28+00:00",
         "rows": 52,
         "sha256": "ed79ce4bcc12929b"
       },
       "resident_population_2020.csv": {
         "bytes": 85943,
-        "fetched": "2026-09-04T14:33:26+00:00",
+        "fetched": "2026-10-23T04:41:07+00:00",
         "rows": 388,
         "sha256": "9d1183c4335a8189"
       },
       "sportsg_sport_facilities.geojson": {
         "bytes": 22526,
-        "fetched": "2026-09-04T14:32:08+00:00",
+        "fetched": "2026-10-23T04:39:36+00:00",
         "rows": 45,
         "sha256": "51dc45c1fcc09fc0"
       },
       "subzone_boundary.geojson": {
         "bytes": 3180569,
-        "fetched": "2026-09-04T14:33:39+00:00",
+        "fetched": "2026-10-23T04:41:20+00:00",
         "rows": 332,
         "sha256": "77e30aa02b1784b6"
       },
       "supermarket_licences.csv": {
         "bytes": 42172,
-        "fetched": "2026-09-04T15:38:39+00:00",
+        "fetched": "2026-10-23T04:39:10+00:00",
         "rows": 478,
         "sha256": "a588eab004ba927a"
       },
       "workers_by_workplace_pa_2020.csv": {
         "bytes": 9252,
-        "fetched": "2026-10-20T08:18:26+00:00",
+        "fetched": "2026-10-23T04:41:59+00:00",
         "rows": 48,
         "sha256": "d5053b464e12f62e"
       }
     },
-    "git_commit": "f1f0298",
-    "latest_fetch": "2026-10-20T08:21:09+00:00"
+    "git_commit": "cec1afa",
+    "latest_fetch": "2026-10-23T04:43:14+00:00"
   },
   "registry": {
-    "built_at": "2026-10-20T09:04:12+00:00",
-    "git_commit": "f1f0298",
+    "built_at": "2026-10-29T10:10:05+00:00",
+    "git_commit": "cec1afa",
     "n_malls": 187,
     "qa_events": {
       "existing_hpm_added": 15,

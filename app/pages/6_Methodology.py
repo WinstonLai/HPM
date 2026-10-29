@@ -79,8 +79,9 @@ and the average is **{index_df['hpm_index'].mean():.1f}**.
 **Where the mall list comes from.** The {n_malls} malls are a union of three Wikipedia
 sources (the *List of shopping malls in Singapore*, every article in *Category: Shopping
 malls in Singapore*, and the "Housing estate commercial areas" section of *List of commercial
-sites in Singapore*), de-duplicated and then geocoded with the OneMap Search API (the top
-search hit is used for each name). Candidates that OneMap couldn't geocode were dropped, so
+sites in Singapore*), de-duplicated and then geocoded with the OneMap Search API (a hit is accepted only if its
+building name matches the mall's name; the top hit alone is often the wrong building). Candidates
+with no matching hit were dropped, so
 the list is **not guaranteed to be exhaustive**. Each mall's region is the URA region of its
 nearest Master Plan subzone centroid.
 """

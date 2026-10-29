@@ -65,3 +65,16 @@ def test_number_variants_try_the_other_spelling():
     assert onemap._number_variants("Lot 1") == ["Lot one"]
     assert onemap._number_variants("Lot One") == ["Lot 1"]
     assert onemap._number_variants("Funan") == []
+
+
+def test_a_different_facility_that_ends_with_the_mall_name_is_rejected():
+    # Found in the committed registry: a hospital and a petrol station had been accepted as malls.
+    assert onemap.match_score("Potong Pasir", cand("KWONG WAI SHIU HOSPITAL @ POTONG PASIR")) == 0
+    assert onemap.match_score("Upper Aljunied", cand("ESSO UPPER ALJUNIED")) == 0
+    # ... but an ordinary tenant ahead of the mall's name still geocodes to the mall.
+    assert onemap.match_score("Tampines Mall", cand("MCDONALD'S TAMPINES MALL")) == 2
+    assert onemap.match_score("Jurong Point", cand("ABC DENTAL CLINIC PTE LTD JURONG POINT")) == 2
+
+
+def test_an_industrial_building_that_starts_with_the_name_is_rejected():
+    assert onemap.match_score("SingPost", cand("SINGPOST REGIONAL ECOMMERCE LOGISTICS HUB")) == 0

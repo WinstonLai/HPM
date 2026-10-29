@@ -79,7 +79,7 @@ Two independent halves connected only through `data/processed/*.csv`:
      subcategory since it only returns direct members) and the "Housing
      estate commercial areas" section of "List of commercial sites in
      Singapore" (neighbourhood centres, some plain-text with no Wikipedia
-     article). Combined this yields ~215 candidates → ~173 after duplicates
+     article). Combined this yields ~215 candidates → ~187 after duplicates and the HPB-listed additions
      are merged and unverifiable geocodes are dropped (see `registry_qa.csv`). Uses wikitext parsing, not HTML — the live page's
      rendered HTML wraps mall lists in Parsoid `data-mw` transclusion JSON
      with no `<a>` tags, so `action=parse&prop=wikitext` is used instead.
@@ -206,7 +206,7 @@ HPMs in `data/manual/existing_hpm.csv` drive both `is_existing_hpm` and
 after editing that file, instead of a full re-scrape; Category A drops Healthier
 Dining Partner outlets that duplicate a Healthier Eatery (postal code + brand);
 Engagement Gap is the *shortfall* of 1.2km-catchment amenities versus the
-amount expected for that population (a log-log fit), rank-scaled — not a raw
+amount expected for that population (a log-log fit whose slope is floored at 0; catchments under `MIN_GAP_POPULATION` = 1,000 residents get NaN), rank-scaled — not a raw
 amenities-per-resident ratio, which is ~0.8 correlated with Reach &
 Population and made population count twice. It is independent of Category C
 (don't redefine it as `100 - C`, which cancels C's Supply contribution). A mall

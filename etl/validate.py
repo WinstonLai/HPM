@@ -69,7 +69,8 @@ def validate_scores(scores: pd.DataFrame, n_malls: int, allow_constant: bool = F
         vals = scores[col]
         if col == "engagement_gap_score":      # NaN = no residents nearby ("n/a")
             if vals.isna().mean() > 0.05:
-                errors.append(f"engagement_gap_score is n/a for {vals.isna().mean():.0%} of malls")
+                msg = f"engagement_gap_score is n/a for {vals.isna().mean():.0%} of malls"
+                (warnings if allow_constant else errors).append(msg)
             vals = vals.dropna()
         elif vals.isna().any():
             errors.append(f"{col} has {int(vals.isna().sum())} missing values")

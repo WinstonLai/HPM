@@ -44,7 +44,7 @@ for param, key in MULTI_PARAMS.items():
         if valid:
             st.session_state[key] = valid
 for param, key in FLAG_PARAMS.items():
-    if key not in st.session_state and st.query_params.get(param) == "1":
+    if key not in st.session_state and st.query_params.get(param) == "1" and (param != "hide_hpm" or has_hpm_list):
         st.session_state[key] = True
 
 
