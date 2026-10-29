@@ -95,13 +95,13 @@ def test_slugify_is_stable():
 
 
 def test_merge_duplicates_preserves_existing_aliases_and_partner_flag():
-    a = {**mall("Alpha Mall", 1.30, 103.80, "111111"), "aliases": "Old Alias", "hpb_partner": 0}
-    b = {**mall("Alpha Plaza", 1.30, 103.80, "111111"), "aliases": "", "hpb_partner": 1}
-    c = {**mall("Lonely Mall", 1.40, 103.90, "222222"), "aliases": "Keep Me", "hpb_partner": 0}
+    a = {**mall("Alpha Mall", 1.30, 103.80, "111111"), "aliases": "Old Alias", "programme_partner": 0}
+    b = {**mall("Alpha Plaza", 1.30, 103.80, "111111"), "aliases": "", "programme_partner": 1}
+    c = {**mall("Lonely Mall", 1.40, 103.90, "222222"), "aliases": "Keep Me", "programme_partner": 0}
     merged, _ = reg.merge_duplicates(pd.DataFrame([a, b, c]))
     rows = merged.set_index("name")
     assert rows.loc["Alpha Mall", "aliases"] == "Old Alias; Alpha Plaza"
-    assert rows.loc["Alpha Mall", "hpb_partner"] == 1
+    assert rows.loc["Alpha Mall", "programme_partner"] == 1
     assert rows.loc["Lonely Mall", "aliases"] == "Keep Me"          # untouched malls keep their aliases
 
 

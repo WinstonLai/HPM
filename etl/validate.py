@@ -96,7 +96,7 @@ def validate_index(index: pd.DataFrame) -> tuple[list[str], list[str]]:
     if index["tier"].isna().any():
         errors.append("some malls have no tier")
     if index["hpm_index"].isna().any():
-        errors.append("some malls have no HPM index")
+        errors.append("some malls have no Health Readiness Index")
     return errors, []
 
 

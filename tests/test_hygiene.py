@@ -21,7 +21,7 @@ import data_loader  # noqa: E402
 def test_user_agent_identifies_the_project_and_takes_an_optional_contact(monkeypatch):
     monkeypatch.delenv("HPM_CONTACT", raising=False)
     ua = useragent.user_agent()
-    assert useragent.PROJECT_URL in ua and "hpb-cip-poc" not in ua
+    assert useragent.PROJECT_URL in ua
     monkeypatch.setenv("HPM_CONTACT", " me@example.org ")
     assert useragent.user_agent().endswith("; me@example.org)")
 

@@ -72,7 +72,7 @@ def reset() -> None:
 
 def effective_weights(settings: dict) -> tuple[dict, dict]:
     """(supply_weights, demand_weights) for scoring. When a block still sits at
-    its slider defaults the exact charter-derived weights are used, not the
+    its slider defaults the exact reference weights are used, not the
     integer-rounded slider values, so unchanged blocks do not drift."""
     defaults = default_settings()
     supply = (scoring.DEFAULT_SUPPLY_WEIGHTS if settings["supply"] == defaults["supply"]

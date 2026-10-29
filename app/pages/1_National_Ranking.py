@@ -13,7 +13,7 @@ import scoring  # noqa: E402
 import weights  # noqa: E402
 from safe_text import to_csv_bytes  # noqa: E402
 
-st.set_page_config(page_title="National Ranking | HPM Dashboard", page_icon="📋", layout="wide")
+st.set_page_config(page_title="National Ranking | Mall Health Dashboard", page_icon="📋", layout="wide")
 st.title("📋 National Ranking")
 
 if not data_loader.data_available():
@@ -66,8 +66,8 @@ with st.sidebar:
         help="Only malls with a known landlord are listed here.",
     )
     tiers = st.multiselect("Readiness tier", OPTIONS["f_tiers"], key="f_tiers")
-    hide_hpm = st.checkbox("Hide existing HPMs", disabled=not has_hpm_list, key="f_hide_hpm",
-                           help=None if has_hpm_list else "No existing-HPM list loaded.")
+    hide_hpm = st.checkbox("Hide reference malls", disabled=not has_hpm_list, key="f_hide_hpm",
+                           help=None if has_hpm_list else "No reference-mall list loaded.")
     show_categories = st.checkbox("Show category scores", key="f_categories")
     filters_active = bool(search.strip() or regions or types or operators or tiers or hide_hpm)
     st.button("Clear filters", on_click=clear_filters, disabled=not filters_active, width="stretch")
@@ -122,7 +122,7 @@ if show_categories:
 
 labels = {"rank": "Rank", "name": "Mall", "region": "Region", "type": "Type", "operator": "Operator",
           "hpm_index": "Score", "tier": "Tier", "supply_score": "Supply Readiness",
-          "demand_score": "Demand Opportunity", "catchment": "Catchment", "existing_hpm": "Existing HPM",
+          "demand_score": "Demand Opportunity", "catchment": "Catchment", "existing_hpm": "Reference mall",
           **scoring.CATEGORY_LABELS}
 table = filtered[columns].rename(columns=labels)
 
@@ -130,9 +130,9 @@ bar = lambda label: st.column_config.ProgressColumn(label, min_value=0, max_valu
 column_config = {labels[c]: bar(labels[c]) for c in
                  ["hpm_index", "supply_score", "demand_score"] + (list(scoring.CATEGORY_LABELS) if show_categories else [])}
 column_config[labels["rank"]] = st.column_config.NumberColumn(
-    labels["rank"], help=f"1 = highest HPM Index, out of {len(df)} malls (not out of the rows shown).")
+    labels["rank"], help=f"1 = highest Health Readiness Index, out of {len(df)} malls (not out of the rows shown).")
 column_config[labels["tier"]] = st.column_config.TextColumn(
-    labels["tier"], help="Fixed cut-offs on the HPM Index (Platinum, Gold, Silver, otherwise Bronze); "
+    labels["tier"], help="Fixed cut-offs on the Health Readiness Index (Platinum, Gold, Silver, otherwise Bronze); "
                          "they can be moved on the What-If Simulator.")
 column_config[labels["catchment"]] = st.column_config.TextColumn(
     labels["catchment"], help="Daytime-led: more workers than residents nearby. Residential: the reverse.")

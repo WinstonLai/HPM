@@ -85,7 +85,7 @@ def test_category_f_groups_by_landlord_and_adds_partner_bonus():
     malls = pd.DataFrame({
         "name": ["a", "b", "c", "d", "e"],
         "operator": ["Big Group", "Big Group", "Big Group", "Unknown", "Solo"],
-        "hpb_partner": [0, 0, 0, 1, 0],
+        "programme_partner": [0, 0, 0, 1, 0],
     })
     f = bcs.compute_category_f(malls)
     assert f[0] == f[1] == f[2] == pytest.approx(80)       # largest portfolio: 100 * 0.8

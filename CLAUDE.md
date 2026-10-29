@@ -5,13 +5,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 A pure-Python data pipeline + Streamlit dashboard that scores and ranks Singapore
-shopping malls on readiness to become HPB "Health Promoting Malls," per the
-*Health Promoting Mall Readiness Assessment Project Charter*
-(`Health Promoting Mall Readiness Assessment Project Charter 20260904.docx`).
+shopping malls on how ready they are to support healthier living. The project is
+framed as standalone: user-facing text (app, README) must not name the originating
+agency, team or project document.
 
 ```
-HPM Index = Supply Readiness (70%) + Demand Opportunity (30%)
-Supply Readiness  = Dining + Fitness + H365 Presence + Healthcare
+Health Readiness Index = Supply Readiness (70%) + Demand Opportunity (30%)
+Supply Readiness  = Dining + Fitness + Community Engagement + Healthcare
                      + Infrastructure + Partnership Readiness
 Demand Opportunity = Reach & Population + Accessibility + Engagement Gap
 ```
@@ -79,7 +79,7 @@ Two independent halves connected only through `data/processed/*.csv`:
      subcategory since it only returns direct members) and the "Housing
      estate commercial areas" section of "List of commercial sites in
      Singapore" (neighbourhood centres, some plain-text with no Wikipedia
-     article). Combined this yields ~215 candidates → ~184 after duplicates, `data/manual/excluded_malls.csv` and the HPB-listed additions
+     article). Combined this yields ~215 candidates → ~184 after duplicates, `data/manual/excluded_malls.csv` and the reference-list additions
      are merged and unverifiable geocodes are dropped (see `registry_qa.csv`). Uses wikitext parsing, not HTML — the live page's
      rendered HTML wraps mall lists in Parsoid `data-mw` transclusion JSON
      with no `<a>` tags, so `action=parse&prop=wikitext` is used instead.
@@ -87,7 +87,7 @@ Two independent halves connected only through `data/processed/*.csv`:
      owner/management/developer field (most malls have no infobox and end up
      "Unknown" — this is genuine data sparsity, not a scraping bug), cleaned
      through `data/manual/operator_aliases.csv` and overridden by
-     `data/manual/operators.csv` where HPB CIP has supplied facts. Every
+     `data/manual/operators.csv` where the maintainers have supplied facts. Every
      mall is geocoded via OneMap → `data/processed/malls.csv`.
      **Geocodes are validated**: OneMap's top hit is often the wrong
      building, so `onemap.geocode_validated` walks all candidates and
@@ -110,7 +110,7 @@ Two independent halves connected only through `data/processed/*.csv`:
    - `build_category_scores.py` joins every raw dataset to the mall registry
      and produces one normalized 0–100 score per category (A–G) per mall →
      `data/processed/category_scores.csv`.
-   - `build_index.py` applies the charter's illustrative weights to produce
+   - `build_index.py` applies the reference weights to produce
      the default ranked view → `data/processed/hpm_index.csv`.
 
    Shared helpers: `datagovsg.py` (throttled/retried data.gov.sg download
@@ -129,7 +129,7 @@ Two independent halves connected only through `data/processed/*.csv`:
    2×2 Readiness×Demand quadrant enhancement — Methodology, an
    interactive walkthrough of the scoring math, data-source limitations and
    weight robustness — and Regional Priorities, a region/planning-area and
-   landlord rollup plus a backtest against existing HPMs).
+   landlord rollup plus a backtest against the reference malls).
    Each page file does its own `sys.path.insert` to reach `app/lib/`
    (there's no package `__init__.py`; pages are run as standalone scripts
    by Streamlit).
@@ -138,7 +138,7 @@ Two independent halves connected only through `data/processed/*.csv`:
 settings under a plain `st.session_state` key (`app/lib/weights.py`), because
 Streamlit drops slider values when their page is not rendered; every page gets
 its ranking from `weights.load_index()` (default CSV unless settings differ) and
-shows `weights.show_banner()`. Tiers are fixed cut-offs on the HPM Index
+shows `weights.show_banner()`. Tiers are fixed cut-offs on the Health Readiness Index
 (`TIER_THRESHOLDS`), not rank quartiles.
 
 **`etl/scoring_formula.py` is the single source of truth for the composite
@@ -184,13 +184,13 @@ based on what fields it actually publishes:
   geocode.
 
 Every raw count is capped at the 95th percentile (`geo.WINSOR_QUANTILE`) and
-then min-max normalized to 0–100 across the mall population (not divided by each mall's total tenant count, which the charter's own
+then min-max normalized to 0–100 across the mall population (not divided by each mall's total tenant count, which a share-based
 worked example uses — that needs a per-mall tenant directory that doesn't
 publicly exist). See the README's "Known proxies / limitations" section for
-the specific proxies used for Category C (H365 engagement → community-club
+the specific proxies used for Category C (community engagement → community-club
 density) and Category F (partnership readiness → scraped operator portfolio
-size), and don't present those proxy scores as the literal metric named in
-the charter without that caveat.
+size), and don't present those proxy scores as the literal metric their names suggest
+without that caveat.
 
 Other deliberate scoring choices to preserve (details in the README's
 limitations section): Category E only counts NParks `PLAYGROUND`/`FITNESS AREA`/
@@ -200,7 +200,7 @@ on-site amenities (dining, gyms, clinics, bike racks) are assigned to their
 *station* with distance decay, not per exit; Reach & Population is a
 distance-weighted catchment of residents, seniors and workers (the Engagement
 Gap keeps the hard 1.2km circle to match its amenity counts); the 48 existing
-HPMs in `data/manual/existing_hpm.csv` drive both `is_existing_hpm` and
+reference malls in `data/manual/existing_hpm.csv` drive both `is_existing_hpm` and
 `add_existing_hpms`, which adds any listed mall the Wikipedia registry lacks
 (14 were missing) — run `python etl/build_mall_registry.py --add-existing-hpms`
 after editing that file, instead of a full re-scrape; Category A drops Healthier
@@ -212,8 +212,8 @@ Population and made population count twice. It is independent of Category C
 (don't redefine it as `100 - C`, which cancels C's Supply contribution). A mall
 with no residents nearby gets NaN, and `scoring_formula._weighted_sum`
 re-weights over the non-NaN factors instead of scoring it 0. Categories C and
-F are proxies and start with lower default weights (10 / 5 vs the charter's
-15 / 10, kept in `CHARTER_SUPPLY_WEIGHTS`); the What-If page can drop them
+F are proxies and start with lower default weights (10 / 5 vs the reference
+15 / 10, kept in `REFERENCE_SUPPLY_WEIGHTS`); the What-If page can drop them
 via `exclude_proxies`. After changing any of these, rebuild with
 `python etl/build_category_scores.py && python etl/build_index.py` and commit
 the refreshed `data/processed/*.csv`, since the Methodology page quotes them.
@@ -224,6 +224,6 @@ All data.gov.sg datasets are pulled live via the current
 `api-open.data.gov.sg/v1/public/api/datasets/{id}/poll-download` API (no key
 required for this volume; throttled to respect the ~5 req/min unauthenticated
 limit). Exact dataset IDs live in `etl/build_amenities.py`'s `DATASETS` dict,
-grouped by charter category (A–G). Full source table and per-category
+grouped by category (A–G). Full source table and per-category
 methodology/limitations are in `README.md` — read it before changing which
 dataset backs a category or how a category is scored.

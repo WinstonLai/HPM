@@ -2,10 +2,10 @@
   1. scrape + geocode the mall registry
   2. download raw amenity/context datasets
   3. join + normalise into per-mall category scores
-  4. compute the default composite HPM index
+  4. compute the default composite Health Readiness Index
 
-Re-run any time to refresh the dashboard's data (the "repeatable nationwide
-assessment" the charter calls for). Safe to re-run repeatedly: raw downloads
+Re-run any time to refresh the dashboard's data (a repeatable nationwide
+assessment). Safe to re-run repeatedly: raw downloads
 and the mall registry are cached and skipped unless --force is passed.
 
 A --limit debug run writes to data/processed_limited/ (or --out-dir), never to

@@ -15,7 +15,7 @@ import scoring  # noqa: E402
 import weights  # noqa: E402
 from safe_text import to_csv_bytes  # noqa: E402
 
-st.set_page_config(page_title="What-If Simulator | HPM Dashboard", page_icon="🎚️", layout="wide")
+st.set_page_config(page_title="What-If Simulator | Mall Health Dashboard", page_icon="🎚️", layout="wide")
 st.title("🎚️ What-If Simulator")
 st.caption(
     "Adjust category weights, the overall Supply/Demand split and the tier cut-offs — the ranking, tiers, "
@@ -103,10 +103,10 @@ with st.sidebar:
     if "exclude_proxies" not in st.session_state:
         st.session_state["exclude_proxies"] = saved["exclude_proxies"]
     exclude_proxy_categories = st.checkbox(
-        "Exclude proxy categories (H365 & HPB Engagement, Partnership Readiness)",
+        "Exclude proxy categories (Community Engagement, Partnership Readiness)",
         key="exclude_proxies",
         help="These two are stand-ins (community-club proximity, landlord portfolio size), not the "
-             "metrics the charter names. Ticking this sets their weight to 0 and re-scales the rest.",
+             "direct measures their names suggest. Ticking this sets their weight to 0 and re-scales the rest.",
     )
 
     st.header("Demand Opportunity weights")
@@ -121,7 +121,7 @@ with st.sidebar:
     st.caption(f"Demand Opportunity weight: **{demand_block_weight}%**")
 
     st.header("Tier cut-offs")
-    st.caption("Minimum HPM Index for each tier. Below Silver is Bronze.")
+    st.caption("Minimum Health Readiness Index for each tier. Below Silver is Bronze.")
     for name in ("Platinum", "Gold", "Silver"):
         if f"tier_{name}" not in st.session_state:
             st.session_state[f"tier_{name}"] = int(saved["tiers"][name])

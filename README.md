@@ -1,12 +1,12 @@
-# Health Promoting Mall (HPM) Readiness Dashboard
+# Mall Health Readiness Dashboard
 
 A pure-Python data pipeline + interactive dashboard that scores and ranks
-Singapore shopping malls on their readiness to become HPB "Health Promoting
-Malls," per the *Health Promoting Mall Readiness Assessment Project Charter*.
+Singapore shopping malls on how ready they are to support healthier living,
+using open government data, OpenStreetMap and Wikipedia.
 
 ```
-HPM Index = Supply Readiness (70%) + Demand Opportunity (30%)
-Supply Readiness  = Dining + Fitness + H365 Presence + Healthcare
+Health Readiness Index = Supply Readiness (70%) + Demand Opportunity (30%)
+Supply Readiness  = Dining + Fitness + Community Engagement + Healthcare
                      + Infrastructure + Partnership Readiness
 Demand Opportunity = Reach & Population + Accessibility + Engagement Gap
 ```
@@ -36,13 +36,13 @@ ETL is fast after the first pass.
 ## Pages
 
 1. **Home** — executive summary: total malls assessed, average index, Top 10, top landlords.
-2. **National Ranking** — full ranked table with name search, filters (region / type / operator / tier / hide existing HPMs), in-cell score bars, optional category columns, and CSV download.
+2. **National Ranking** — full ranked table with name search, filters (region / type / operator / tier / hide reference malls), in-cell score bars, optional category columns, and CSV download.
 3. **What-If Simulator** — sliders for every category weight, the overall Supply/Demand split, a proxy-category switch and the tier cut-offs; ranking, tiers and Top 10/20/50 shortlists recompute instantly, show movement against the default rank, export to CSV, and come with a rank-stability check. Your settings apply to every other page until reset.
 4. **Mall Comparison** — radar chart (with the all-mall median) and strengths/weaknesses for up to 5 malls, judged by percentile against all malls, plus the raw numbers behind each score.
-5. **National Map** — mall locations on a colour-blind-safe scale with a legend, formatted tooltips, a shortlist toggle, existing-HPM rings and a zoom-to-mall selector.
-6. **Strategic Matrix** — 2×2 Readiness × Demand quadrant view (Pioneer HPM / Quick Wins / Strategic Investment / Future Monitoring), the charter's proposed enhancement over a flat ranking, with shaded and labelled quadrants, top-N labels, population-sized dots, and median or fixed cut-offs.
-7. **Methodology** — plain-language explanation of the data sources, why raw counts are normalised, and the category weights, with an interactive worked example that recomputes any selected mall's actual score step by step (Supply contributions → Demand contributions → final index), a "what this score doesn't capture" section, and a robustness section (alternative readings of the charter's weights, rank stability under random re-weighting, nominal vs effective weights).
-8. **Regional Priorities** — high-demand malls by region or planning area that HPB has not yet reached, chain-vs-independent landlord comparison, and a backtest of the index against HPB's existing Health Promoting Malls (once `data/manual/existing_hpm.csv` is supplied).
+5. **National Map** — mall locations on a colour-blind-safe scale with a legend, formatted tooltips, a shortlist toggle, reference-mall rings and a zoom-to-mall selector.
+6. **Strategic Matrix** — 2×2 Readiness × Demand quadrant view (Pioneer / Quick Wins / Strategic Investment / Future Monitoring), an enhancement over a flat ranking, with shaded and labelled quadrants, top-N labels, population-sized dots, and median or fixed cut-offs.
+7. **Methodology** — plain-language explanation of the data sources, why raw counts are normalised, and the category weights, with an interactive worked example that recomputes any selected mall's actual score step by step (Supply contributions → Demand contributions → final index), a "what this score doesn't capture" section, and a robustness section (alternative readings of the reference weights, rank stability under random re-weighting, nominal vs effective weights).
+8. **Regional Priorities** — high-demand malls by region or planning area that are not yet on the reference list, chain-vs-independent landlord comparison, and a backtest of the index against the reference malls (once `data/manual/existing_hpm.csv` is supplied).
 
 ## Data sources
 
@@ -54,11 +54,11 @@ fabricated. All data.gov.sg datasets are pulled live via the current
 | Category | Datasets | Publisher |
 |---|---|---|
 | Mall registry | Three Wikipedia sources unioned + de-duplicated: "List of shopping malls in Singapore", `Category:Shopping malls in Singapore`, and the "Housing estate commercial areas" section of "List of commercial sites in Singapore" (184 malls after de-duplication and geocode validation) — geocoded via OneMap Search API | Wikipedia / OneMap (SLA) |
-| A – Healthy Dining | Healthier Eateries, Healthier Dining Partners – F&B Partners, List of Supermarket Licences | HPB / NEA |
-| B – Physical Activity | Gyms@SG, SportSG Sport Facilities, commercial gyms and studios from OpenStreetMap (Overpass API) | HPB / SportSG / OpenStreetMap contributors |
-| C – H365 & HPB Engagement | Community Club / PAssion WaVe Outlet (proxy — see Limitations) | People's Association |
+| A – Healthy Dining | Healthier Eateries, Healthier Dining Partners – F&B Partners, List of Supermarket Licences | data.gov.sg / NEA |
+| B – Physical Activity | Gyms@SG, SportSG Sport Facilities, commercial gyms and studios from OpenStreetMap (Overpass API) | data.gov.sg / SportSG / OpenStreetMap contributors |
+| C – Community Engagement | Community Club / PAssion WaVe Outlet (proxy — see Limitations) | People's Association |
 | D – Healthcare | CHAS Clinics, Listing of Licensed Pharmacies | MOH / HSA |
-| E – Healthy Infrastructure | Parks@SG, Park Facilities (playgrounds, fitness areas, drinking fountains, foot-relax), LTA Bicycle Rack | HPB / NParks / LTA |
+| E – Healthy Infrastructure | Parks@SG, Park Facilities (playgrounds, fitness areas, drinking fountains, foot-relax), LTA Bicycle Rack | data.gov.sg / NParks / LTA |
 | F – Landlord & Partnership Readiness | Operator scraped from Wikipedia infobox (proxy — see Limitations) | Wikipedia |
 | G – Demand (Reach/Population/Accessibility) | Resident Population by Planning Area/Subzone (Census 2020), Master Plan 2019 Subzone Boundary, LTA MRT Station Exits, LTA Bus Stops | SingStat / URA / LTA |
 
@@ -101,13 +101,13 @@ Exact dataset IDs are in `etl/build_amenities.py`.
 - **Normalisation**: every raw count is capped at the 95th percentile and then
   min-max scaled to 0–100 across the mall population (`geo.min_max_normalize`,
   `WINSOR_QUANTILE`), so a mall's score reflects its *relative* standing, not
-  its raw size. This is **not** the charter's own worked example (which
-  divides by each mall's *total* tenant count, e.g. "% of F&B outlets in
+  its raw size. This is **not** a share-of-tenants score (which
+  would divide by each mall's *total* tenant count, e.g. "% of F&B outlets in
   HDP") — that formula needs a full per-mall tenant directory, which is not
   publicly available. Min-max scaling is a linear rescale of the raw count:
   it puts categories on a common 0–100 scale so they can be weighted and
   summed, but within a category the ranking is the same as the raw-count
-  ranking, so it does **not** remove the size bias the charter warns about.
+  ranking, so it does **not** remove the size bias a share-based score would avoid.
   The cap addresses outlier sensitivity: without it one mall with a very
   high count compressed everyone else's score, and categories' *effective*
   influence (weight × spread) drifted far from their nominal weight (e.g.
@@ -132,20 +132,20 @@ Exact dataset IDs are in `etl/build_amenities.py`.
 
 ### Known proxies / limitations (documented, not hidden)
 
-- **Category C (H365 & HPB Engagement)**: no public dataset of H365 event
-  locations/frequency exists. Proxied by nearby Community Club / PAssion
-  WaVe Outlet density, since CCs are a primary channel for HPB/community
+- **Category C (Community Engagement)**: no public dataset of community
+  health-event locations/frequency exists. Proxied by nearby Community Club /
+  PAssion WaVe Outlet density, since CCs are a primary channel for community
   programming.
 - **Category F (Partnership Readiness)**: no public partnership dataset
-  exists — HPB's own website names only one confirmed partner (Downtown
-  East). Proxied by the scraped mall operator's portfolio size (a bigger
+  exists — only one confirmed partner (Downtown
+  East) is publicly named. Proxied by the scraped mall operator's portfolio size (a bigger
   chain is more likely to have centralised CSR/health-programme capacity),
   plus a +20 bonus for the one confirmed partnership. The infobox
   field used is owner, else management, else developer. Known variants of
   one landlord are merged by hand in `data/manual/operator_aliases.csv`
   (e.g. all the CapitaLand trust names → "CapitaLand"), and
-  `data/manual/operators.csv` lets HPB CIP supply authoritative landlord
-  and `hpb_partner` facts per mall, which override the scraped values.
+  `data/manual/operators.csv` lets maintainers supply authoritative landlord
+  and `programme_partner` facts per mall, which override the scraped values.
   Operator names not in the alias table are still free text and may not
   merge.
 - **Category A "% of F&B outlets in HDP"**: no public per-mall total-tenant-
@@ -153,9 +153,9 @@ Exact dataset IDs are in `etl/build_amenities.py`.
   Healthier Dining Partners + licensed supermarkets found near the mall),
   not a true participation percentage. Supermarket *presence* is included
   (NEA's List of Supermarket Licences), but there's no public dataset that
-  flags which specific supermarkets carry HPB's "healthier choice" range —
+  flags which specific supermarkets carry a "healthier choice" range —
   so this counts any licensed supermarket, not specifically ones "with
-  healthier choice options" as the charter's measure names it.
+  healthier choice options".
 - **Population catchment**: Reach & Population = 50% residents + 30% seniors
   (65+) + 20% workers, each capped and scaled. People are counted by
   distance: a subzone (Census 2020, placed at its polygon *centroid*, a
@@ -174,27 +174,27 @@ Exact dataset IDs are in `etl/build_amenities.py`.
 - **Category E (Healthy Infrastructure)**: NParks' Park Facilities dataset
   lists every piece of park infrastructure (mostly carparks, noticeboards,
   access points and map boards). Only `PLAYGROUND`, `FITNESS AREA`,
-  `DRINKING FOUNTAIN` (the charter's water refill points) and `FOOT RELAX`
+  `DRINKING FOUNTAIN` (water refill points) and `FOOT RELAX`
   (wellness) rows are counted (`PARK_FACILITY_CLASSES` in
   `build_category_scores.py`); Parks@SG parks and LTA bicycle racks are
   unchanged. These are park facilities within 500m, not facilities inside
   the mall.
-- **Category B (Physical Activity)**: Gyms@SG only lists HPB-registered
+- **Category B (Physical Activity)**: Gyms@SG only lists registered
   gyms, so commercial gyms and fitness studios are added from OpenStreetMap
   (`etl/osm.py`, Overpass API; `leisure=fitness_centre|sports_centre`,
   `amenity=gym`). OSM venues within 40m of a listed venue are dropped as
   duplicates. OSM coverage of small studios is patchy.
-- **"% of F&B outlets" (experiment, not in the index)**: the charter's
+- **"% of F&B outlets" (experiment, not in the index)**: a
   normalised Healthy Dining metric needs a per-mall tenant count. As a
-  trial, `A_healthier_share` = HPB healthier-eatery outlets ÷ OSM F&B
+  trial, `A_healthier_share` = healthier-eatery outlets ÷ OSM F&B
   outlets within 200m (malls with ≥5 mapped F&B outlets). It stays out of
-  the score because OSM is incomplete inside malls (in 11 malls HPB lists
+  the score because OSM is incomplete inside malls (in 11 malls the Healthier Dining list has
   more healthier outlets than OSM maps F&B outlets at all) and it tracks the
   raw count closely (rank correlation ~0.8). A real tenant directory would
   make it usable.
-- **Existing HPMs**: `data/manual/existing_hpm.csv` (`name,source,match_as`)
-  holds the 48 malls HPB CIP lists as existing Health Promoting Malls
-  (`match_as` is the registry spelling where HPB's differs, e.g. "Singpost
+- **Reference malls**: `data/manual/existing_hpm.csv` (`name,source,match_as`)
+  holds a curated list of 48 malls already known for health-promotion programmes
+  (`match_as` is the registry spelling where the list's differs, e.g. "Singpost
   Centre" → "SingPost"). The build sets `is_existing_hpm` from it, and the
   Regional Priorities page backtests the index. **14 of the 48 were missing
   from the Wikipedia-scraped registry** (Terminal 3, United Square, KINEX,
@@ -203,16 +203,15 @@ Exact dataset IDs are in `etl/build_amenities.py`.
   (`build_mall_registry.add_existing_hpms`; `--add-existing-hpms` does just
   that without re-scraping). The same gap probably affects malls that are
   not on the list, so the registry should be treated as incomplete.
-  Result at the time of writing: AUC 0.73 (0.5 = chance); 13 of 48 existing
-  HPMs rank in the Top 20 and 25 in the Top 50 of ~190. Healthy Dining
+  Result at the time of writing: AUC 0.73 (0.5 = chance); 13 of 48 reference
+  malls rank in the Top 20 and 25 in the Top 50 of ~190. Healthy Dining
   separates them best (0.77) but is partly circular, since it is built from
-  HPB's own Healthier Dining datasets; Accessibility (0.48) and Physical
+  the national Healthier Dining datasets; Accessibility (0.48) and Physical
   Activity (0.52) do not separate them at all.
 - **Robustness**: `scoring_formula.rank_stability` re-ranks the malls under 500
   random weightings, and `scenario_comparison` compares other readings of
-  the charter's ambiguous weights (its category weights sum to 90 + Demand
-  10, yet it also says 70/30). The default is unchanged; the interpretation
-  still needs HPB CIP's sign-off.
+  the ambiguous reference weights (the category weights sum to 90 + Demand
+  10, yet the formula also says 70/30). The default is unchanged.
 - **Category A overlap**: the Healthier Eateries and Healthier Dining
   Partners datasets describe many of the same outlets. Partner outlets are
   dropped when an eatery with the same postal code + brand exists, and
@@ -225,7 +224,7 @@ Exact dataset IDs are in `etl/build_amenities.py`.
   silently treated as "no infobox". They now retry, and a persistent failure
   is recorded in `registry_qa.csv`.)
 - **Tiers and quadrants** are labels within this list, not certifications.
-  Tiers use fixed cut-offs on the HPM Index (Platinum ≥ 50, Gold ≥ 35, Silver ≥
+  Tiers use fixed cut-offs on the Health Readiness Index (Platinum ≥ 50, Gold ≥ 35, Silver ≥
   20, else Bronze; `TIER_THRESHOLDS` in `scoring_formula.py`), so the number of
   malls per tier changes with the weights; the cut-offs are a judgement call
   and the What-If Simulator can move them. (Earlier versions used rank
@@ -237,7 +236,7 @@ Exact dataset IDs are in `etl/build_amenities.py`.
   in Wikipedia's "Housing estate commercial areas" list is a neighbourhood
   centre; "Town Centre" names are areas; market keywords) with hand-curated
   overrides in `data/manual/mall_types.csv`. It is a heuristic; the ranking
-  page can filter on it. HPB-designated malls are always "Shopping mall".
+  page can filter on it. Reference malls are always "Shopping mall".
 - **Engagement Gap** ("untapped demand"): health-promoting amenities
   (healthier eateries, gyms/sport facilities, CHAS clinics) within 1.2km,
   compared with the number a catchment of that population would typically
@@ -258,14 +257,14 @@ Exact dataset IDs are in `etl/build_amenities.py`.
   doesn't simply mirror Category C (an earlier version defined it as
   `100 - Category C`, which cancelled C's own Supply contribution almost
   exactly).
-- **Default weights**: the charter's illustrative Supply weights
+- **Default weights**: the original reference Supply weights
   (25/20/15/10/10/10, summing to 90 because Demand Potential was 10) are
   re-scaled to sum to 100 within the Supply block, except that the two
-  proxy categories start lower (H365 & HPB Engagement 15 → 10, Partnership
-  Readiness 10 → 5) because they are coarse stand-ins; the charter values
-  are kept as `CHARTER_SUPPLY_WEIGHTS` in `etl/scoring_formula.py`, and the
+  proxy categories start lower (Community Engagement 15 → 10, Partnership
+  Readiness 10 → 5) because they are coarse stand-ins; the reference values
+  are kept as `REFERENCE_SUPPLY_WEIGHTS` in `etl/scoring_formula.py`, and the
   What-If Simulator can switch both proxies off. The Demand block's three
-  factors are weighted equally (the charter doesn't specify them).
+  factors are weighted equally.
 
 ## Repository layout
 

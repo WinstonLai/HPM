@@ -13,11 +13,11 @@ import scoring  # noqa: E402
 import weights  # noqa: E402
 from safe_text import escape_html, to_csv_bytes  # noqa: E402
 
-st.set_page_config(page_title="Strategic Matrix | HPM Dashboard", page_icon="🧭", layout="wide")
+st.set_page_config(page_title="Strategic Matrix | Mall Health Dashboard", page_icon="🧭", layout="wide")
 st.title("🧭 Strategic Matrix")
 st.caption(
-    "Readiness (Supply Score) vs Demand (Demand Opportunity Score) — the charter's proposed enhancement "
-    "over a flat ranked list for leadership discussions."
+    "Readiness (Supply Score) vs Demand (Demand Opportunity Score) — a 2×2 view "
+    "that adds context to a flat ranked list."
 )
 
 if not data_loader.data_available():
@@ -45,7 +45,7 @@ df = scoring.add_strategic_quadrant(df, supply_cut=supply_cut, demand_cut=demand
 
 # Okabe-Ito palette: distinguishable with common forms of colour blindness.
 QUADRANT_COLORS = {
-    "Pioneer HPM": "#0072B2",
+    "Pioneer": "#0072B2",
     "Quick Wins": "#009E73",
     "Strategic Investment": "#E69F00",
     "Future Monitoring": "#999999",
@@ -53,7 +53,7 @@ QUADRANT_COLORS = {
 # Plotly renders labels and hover text as pseudo-HTML, so escape the scraped names.
 df["label"] = df["name"].where(df["rank"] <= label_n, "").map(escape_html)
 df["hover_label"] = df["name"].map(escape_html)
-df["hpm_status"] = df["is_existing_hpm"].map({1: "Existing HPM", 0: "Not yet an HPM"}) if has_hpm_list else "Mall"
+df["hpm_status"] = df["is_existing_hpm"].map({1: "Reference mall", 0: "Not a reference mall"}) if has_hpm_list else "Mall"
 df["nearby_people"] = (df["pop_reach_weighted"] + df["worker_reach_weighted"]).clip(lower=1) \
     if {"pop_reach_weighted", "worker_reach_weighted"} <= set(df.columns) else 1.0
 
@@ -63,21 +63,21 @@ fig = px.scatter(
     hover_data={"rank": True, "region": True, "operator": True, "hpm_index": ":.1f", "demand_score": ":.1f",
                 "supply_score": ":.1f", "label": False, "hover_label": False, "nearby_people": False, "hpm_status": False},
     labels={"demand_score": "Demand Opportunity Score →", "supply_score": "Supply Readiness Score →",
-            "quadrant": "Quadrant", "hpm_status": "", "hpm_index": "HPM Index", "rank": "Rank"},
+            "quadrant": "Quadrant", "hpm_status": "", "hpm_index": "Health Readiness Index", "rank": "Rank"},
     category_orders={"quadrant": list(QUADRANT_COLORS)},
 )
 fig.update_traces(textposition="top center", textfont_size=10)
 if has_hpm_list:
-    # A ring around each existing HPM, as one legend entry (colour already encodes the quadrant;
-    # also encoding HPM status as a symbol multiplied the legend into eight entries).
+    # A ring around each reference mall, as one legend entry (colour already encodes the quadrant;
+    # also encoding reference-mall status as a symbol multiplied the legend into eight entries).
     hpm = df[df["is_existing_hpm"] == 1]
-    fig.add_scatter(x=hpm["demand_score"], y=hpm["supply_score"], mode="markers", name="Existing HPM",
+    fig.add_scatter(x=hpm["demand_score"], y=hpm["supply_score"], mode="markers", name="Reference mall",
                     hoverinfo="skip", marker=dict(symbol="circle-open", size=17, color="#222222", line=dict(width=2)))
 
 x_max = max(df["demand_score"].max() * 1.08, demand_cut * 1.2, 10)
 y_max = max(df["supply_score"].max() * 1.08, supply_cut * 1.2, 10)
 shade = {  # (x0, x1, y0, y1, colour, label, label anchor)
-    "Pioneer HPM": (demand_cut, x_max, supply_cut, y_max, "#0072B2", "right", "top"),
+    "Pioneer": (demand_cut, x_max, supply_cut, y_max, "#0072B2", "right", "top"),
     "Quick Wins": (0, demand_cut, supply_cut, y_max, "#009E73", "left", "top"),
     "Strategic Investment": (demand_cut, x_max, 0, supply_cut, "#E69F00", "right", "bottom"),
     "Future Monitoring": (0, demand_cut, 0, supply_cut, "#999999", "left", "bottom"),
@@ -98,14 +98,14 @@ st.plotly_chart(fig, width="stretch")
 st.caption(
     f"Split at Demand {demand_cut:.1f} and Supply {supply_cut:.1f} "
     f"({'the median of each axis' if mode.startswith('Median') else 'fixed scores you chose'}). "
-    + ("Ringed dots are existing HPMs. " if has_hpm_list else "")
+    + ("Ringed dots are reference malls. " if has_hpm_list else "")
     + ("Dot size is the distance-weighted residents + workers nearby." if size_by_pop else "")
 )
 
 st.divider()
 cols = st.columns(4)
 descriptions = {
-    "Pioneer HPM": "High readiness + high demand -> ready for immediate deployment.",
+    "Pioneer": "High readiness + high demand -> ready for immediate deployment.",
     "Quick Wins": "High readiness + low demand -> low-effort expansion.",
     "Strategic Investment": "Low readiness + high demand -> high-impact opportunities needing capability building.",
     "Future Monitoring": "Low readiness + low demand -> not immediate priorities.",
@@ -121,8 +121,8 @@ selected_quadrant = st.selectbox("Drill into a quadrant", list(descriptions.keys
 subset = df[df["quadrant"] == selected_quadrant].sort_values("hpm_index", ascending=False)
 table = subset[["rank", "name", "region", "operator", "supply_score", "demand_score", "hpm_index"]].rename(
     columns={"rank": "Rank", "name": "Mall", "region": "Region", "operator": "Operator",
-             "supply_score": "Supply", "demand_score": "Demand", "hpm_index": "HPM Index"})
-st.dataframe(table.style.format({"Supply": "{:.1f}", "Demand": "{:.1f}", "HPM Index": "{:.1f}"}),
+             "supply_score": "Supply", "demand_score": "Demand", "hpm_index": "Health Readiness Index"})
+st.dataframe(table.style.format({"Supply": "{:.1f}", "Demand": "{:.1f}", "Health Readiness Index": "{:.1f}"}),
              hide_index=True, width="stretch")
 st.download_button(f"Download {selected_quadrant} (CSV)", to_csv_bytes(table),
                    file_name=f"hpm_{selected_quadrant.lower().replace(' ', '_')}.csv", mime="text/csv")
