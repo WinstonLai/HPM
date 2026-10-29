@@ -15,15 +15,15 @@ import osm  # noqa: E402
 # category -> list of (dataset_id, filename, publisher)
 DATASETS: dict[str, list[tuple[str, str, str]]] = {
     "A_dining": [
-        ("d_2925c2ccf75d1c135c2d469e0de3cee6", "healthier_eateries.geojson", "data.gov.sg"),
+        ("d_2925c2ccf75d1c135c2d469e0de3cee6", "healthier_eateries.geojson", "HPB"),
         # NB: despite the dataset name suggesting geospatial data, this one is
         # published as a plain CSV with a free-text outlet address (no lat/lon).
-        ("d_c475b9170c08f90580f4041bffd51639", "healthier_dining_fnb_partners.csv", "data.gov.sg"),
+        ("d_c475b9170c08f90580f4041bffd51639", "healthier_dining_fnb_partners.csv", "HPB"),
         # Plain CSV, no coordinates: building_name/block/street/postal_code columns.
         ("d_11edd0117280c5776651d7891114c88c", "supermarket_licences.csv", "NEA"),
     ],
     "B_fitness": [
-        ("d_b3ae090692ecf632116c9885cfbd3424", "gyms_at_sg.geojson", "data.gov.sg"),
+        ("d_b3ae090692ecf632116c9885cfbd3424", "gyms_at_sg.geojson", "HPB"),
         ("d_9b87bab59d036a60fad2a91530e10773", "sportsg_sport_facilities.geojson", "SportSG"),
     ],
     "C_engagement": [
@@ -35,7 +35,7 @@ DATASETS: dict[str, list[tuple[str, str, str]]] = {
         ("d_bc50d72a9d61457964c6ea8d8ba7dce2", "licensed_pharmacies.csv", "HSA"),
     ],
     "E_infrastructure": [
-        ("d_99b71f5d34cf57a3a592fbfdef1f42b6", "parks_at_sg.geojson", "data.gov.sg"),
+        ("d_99b71f5d34cf57a3a592fbfdef1f42b6", "parks_at_sg.geojson", "HPB"),
         ("d_14d807e20158338fd578c2913953516e", "park_facilities.geojson", "NParks"),
         ("d_937424cca6d1617288a82a7aeb89f76d", "bicycle_racks.geojson", "LTA"),
     ],
